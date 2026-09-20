@@ -1,0 +1,16 @@
+{
+  "name": "@org/frontend",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "name": "frontend",
+    "sourceRoot": "apps/frontend/src"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "next": "~16.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.3.3"
+  }
+}

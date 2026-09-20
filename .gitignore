@@ -48,3 +48,37 @@ Thumbs.db
 .nx/polygraph
 .nx/self-healing
 .nx/migrate-runs
+
+# Next.js
+.next
+out
+
+test-output
+
+# --- plate-vision ---
+
+# Next.js
+.next
+apps/frontend/.next
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+!.env.example
+
+# Uploaded / generated media (lives in the `media` docker volume)
+media/
+apps/backend/media/
+apps/ai-service/media/
+
+# Generated API types (regenerate with: nx run api-types:generate)
+libs/api-types/openapi.json
