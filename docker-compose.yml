@@ -51,6 +51,7 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
+    entrypoint: ['/app/docker-entrypoint.sh']
     command: python manage.py runserver 0.0.0.0:8000
     env_file: .env
     volumes:
@@ -92,6 +93,8 @@ services:
         condition: service_healthy
       ai-service:
         condition: service_healthy
+      backend:
+        condition: service_healthy # backend applies migrations on start
 
   ai-service:
     build:

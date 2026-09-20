@@ -416,36 +416,110 @@ Phase 6 will generate.
 ### Phase 6 — Type generation
 **Goal:** the API contract cannot silently drift.
 
-- [ ] `nx run backend:openapi` → `libs/api-types/openapi.json` (spectacular export)
-- [ ] `libs/api-types` with `openapi-typescript` → `src/index.ts`, exported via tsconfig path
-- [ ] Frontend fetch layer typed from the generated `Job` / `Detection`
-- [ ] `generate` depends on `openapi` in Nx so one command refreshes both
+- [x] `nx run backend:openapi` → `libs/api-types/openapi.json` (spectacular export)
+- [x] `libs/api-types` with `openapi-typescript` → `src/index.ts`, exported via tsconfig path
+- [x] Frontend fetch layer typed from the generated `Job` / `Detection`
+- [x] `generate` depends on `openapi` in Nx so one command refreshes both
 
 **Done when:** renaming a serializer field and regenerating produces a frontend type error.
+
+**Status: complete.** Done-when demonstrated literally: renamed `plate_text` to
+`plate_number` in `DetectionSerializer`, ran `nx run api-types:generate`, and the
+frontend build failed with
+`Property 'plate_text' does not exist on type ...` pointing at
+`DetectionTable.tsx:47`. Reverted; everything green again.
+
+One command refreshes the chain — `api-types:generate` declares
+`dependsOn: ["backend:openapi"]`, so drf-spectacular re-exports `openapi.json`
+from the backend container and `openapi-typescript` regenerates `schema.ts`.
+Nx now shows `frontend -> api-types` in the graph.
+
+**Two backend fixes the generator exposed.** Generating types is what made these
+visible; they were latent inaccuracies in the API's self-description:
+- `status`, `error`, `frame_count`, `started_at`, `finished_at` came out
+  *optional*, because DRF treats model fields with defaults as writable.
+  `JobSerializer`/`DetectionSerializer` are read-only in practice, so
+  `read_only_fields = fields` now says so and every field is correctly
+  always-present.
+- `bbox` came out as `unknown` — a `JSONField` has no shape. Declared as a
+  4-element `ListField(IntegerField)`, so it generates as `number[]` and is
+  documented in the schema.
+
+Layout: `libs/api-types/src/schema.ts` is generated and **committed** (a fresh
+clone type-checks without Docker running); `openapi.json` is a build artifact and
+gitignored; `src/index.ts` is hand-written, maps raw schema names to friendly
+aliases, and is types-only so it emits no runtime code — no `transpilePackages`
+needed. The frontend's `src/lib/types.ts` re-exports from `@org/api-types` and
+keeps the one runtime helper (`isTerminal`) local.
+
+`apps/backend/project.json` was created here for the `openapi` target only;
+Phase 7 adds `serve`, `migrate`, `test` and `lint` to it.
+
+**Docker gotcha, worth a README line:** the frontend keeps `node_modules` in an
+anonymous volume, and compose *preserves* those across `--force-recreate`. After
+changing frontend dependencies the stale volume wins and pnpm silently
+re-installs inside the container on every start (slow, and it masks the rebuild).
+Use `docker compose up -d --force-recreate --renew-anon-volumes frontend`.
 
 ---
 
 ### Phase 7 — Nx targets, docs, smoke test
 **Goal:** one obvious command per task; a fresh clone works.
 
-- [ ] `apps/backend/project.json`: `serve`, `migrate`, `makemigrations`, `shell`, `test`, `lint`, `openapi`
-- [ ] `apps/ai-service/project.json`: `serve`, `test`, `lint`
-- [ ] Root `dev` target = `docker compose up`; `cache: false` on all serve targets;
+- [x] `apps/backend/project.json`: `serve`, `migrate`, `makemigrations`, `shell`, `test`, `lint`, `openapi`
+- [x] `apps/ai-service/project.json`: `serve`, `test`, `lint`
+- [x] Root `dev` target = `docker compose up`; `cache: false` on all serve targets;
       declare inputs on `test`/`lint` so caching is real
-- [ ] Ruff for both Python apps
-- [ ] `README.md` — prerequisites, `cp .env.example .env`, `docker compose up`, the URLs,
+- [x] Ruff for both Python apps
+- [x] `README.md` — prerequisites, `cp .env.example .env`, `docker compose up`, the URLs,
       common commands, and **how to swap the stub for the real model**
-- [ ] End-to-end smoke test with a sample JPEG and a short MP4, from a clean
+- [x] End-to-end smoke test with a sample JPEG and a short MP4, from a clean
       `docker compose down -v`
 
 **Done when:** `docker compose down -v && docker compose up` on a clean checkout
 gets to a working upload with no manual steps beyond copying `.env`.
 
+**Status: complete.** Done-when verified properly: rsynced the repo to a temp
+directory excluding everything gitignored (no `node_modules`, no `.env`, no
+`media`, no `openapi.json` — 166 files, what a fresh clone actually contains),
+then `cp .env.example .env && docker compose up -d --build`. All six services came
+up in the right order, migrations applied themselves, and both fixtures processed
+end to end:
+
+```
+car.jpg      status=done frames=1  detections=1 annotated=1   2s
+traffic.mp4  status=done frames=60 detections=9 annotated=7   2s
+all media served via the proxy: YES
+unsupported type -> HTTP 400
+```
+
+Then torn down with `down -v` and the working stack restored.
+
+**The gap this phase closed:** nothing ran migrations. A clean `docker compose up`
+would have started Django against an empty database and 500'd on the first
+request. Added `apps/backend/docker-entrypoint.sh`, used only by the `backend`
+service, and made `worker` wait on `backend: service_healthy` so migrations can
+never race between the two containers sharing that image.
+
+Targets: `backend` has serve/migrate/makemigrations/shell/test/lint/openapi;
+`ai-service` has serve/test/lint; serve targets are uncached. A `python` named
+input in `nx.json` (`**/*.py`, `pyproject.toml`, `uv.lock`, `Dockerfile`,
+`docker-compose.yml`) makes the Docker-wrapped test/lint targets genuinely
+cacheable — verified both ways: 7/7 cache hits in 372ms, and a one-line edit to
+`models.py` correctly busted `backend:test` before rehitting on revert.
+Root scripts: `pnpm dev`, `dev:build`, `down`, `reset`, `logs`.
+
+`README.md` covers prerequisites, the two-command quickstart, the architecture,
+every command, how to swap in the real model, the config table, and a
+troubleshooting section carrying the traps found during the build (cached 301s,
+the anonymous-volume reinstall, uv build-network stalls, GPU on Apple Silicon).
+
 ---
 
 ## 5. Known constraints / risks
 
-- ~~Docker daemon not running~~ — started during Phase 1; `db` and `redis` verified healthy.
+- ~~Docker daemon not running~~ — resolved in Phase 1. Note Docker Desktop quit
+  on its own twice mid-build; if the CLI cannot reach the daemon, that is why.
 - **No GPU in Docker on Apple Silicon.** When the real model arrives it runs CPU-only
   inside the container. `AI_SERVICE_URL` is env-driven precisely so `ai-service` can be
   run natively on the host and pointed at via `host.docker.internal:8100` if inference

@@ -4,6 +4,50 @@
   "projectType": "application",
   "sourceRoot": "apps/backend",
   "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": { "cwd": "{workspaceRoot}", "command": "docker compose up backend worker" },
+      "cache": false
+    },
+    "migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm backend python manage.py migrate"
+      },
+      "cache": false
+    },
+    "makemigrations": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm backend python manage.py makemigrations"
+      },
+      "cache": false
+    },
+    "shell": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm backend python manage.py shell"
+      },
+      "cache": false
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": { "cwd": "{workspaceRoot}", "command": "docker compose run --rm backend pytest" },
+      "inputs": ["python"],
+      "cache": true
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm --no-deps backend ruff check ."
+      },
+      "inputs": ["python"],
+      "cache": true
+    },
     "openapi": {
       "executor": "nx:run-commands",
       "options": {

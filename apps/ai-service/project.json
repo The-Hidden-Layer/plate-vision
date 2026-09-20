@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "ai-service",
+  "projectType": "application",
+  "sourceRoot": "apps/ai-service",
+  "targets": {
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": { "cwd": "{workspaceRoot}", "command": "docker compose up ai-service" },
+      "cache": false
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm --no-deps ai-service pytest"
+      },
+      "inputs": ["python"],
+      "cache": true
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm --no-deps ai-service ruff check ."
+      },
+      "inputs": ["python"],
+      "cache": true
+    }
+  }
+}

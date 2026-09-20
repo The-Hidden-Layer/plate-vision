@@ -1,109 +1,176 @@
-# New Nx Repository
+# plate-vision
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+License plate **detection** and **recognition** demo. Upload an image or a video,
+watch it process, see the plates.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.
+Nx monorepo · Next.js frontend · Django backend · FastAPI AI service · Docker.
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/docs/technologies/typescript/introduction?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+> The AI model is developed elsewhere. This repo ships a **stub** behind a frozen
+> HTTP contract so the whole pipeline runs today; the real model is a drop-in
+> replacement. See [docs/ai-contract.md](docs/ai-contract.md).
 
-🚀 If you haven't connected to Nx Cloud yet, [complete your setup here](https://cloud.nx.app/get-started). Get faster builds with remote caching, distributed task execution, and self-healing CI. [See how your workspace can benefit](#nx-cloud).
+---
 
-## Generate a library
+## Quickstart
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+Prerequisites: **Docker Desktop** (running) and nothing else. Node and Python are
+only needed if you want to run Nx commands outside Docker.
+
+```bash
+cp .env.example .env
+docker compose up
 ```
 
-## Run tasks
+First run builds four images and takes a few minutes. Then:
 
-To build the library use:
+| URL | What |
+|---|---|
+| http://localhost:3000 | The app — upload here |
+| http://localhost:3000/jobs | Recent jobs |
+| http://localhost:8000/api/docs | Swagger UI |
+| http://localhost:8000/admin | Django admin (`nx run backend:shell` to make a user) |
+| http://localhost:8100/health | AI service |
 
-```sh
-npx nx run pkg1:build
-```
+Migrations are applied automatically when `backend` starts.
 
-To run any task with Nx use:
-
-```sh
-npx nx run <project-name>:<target>
-```
-
-These targets are either [inferred automatically](https://nx.dev/docs/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
-
-[More about running tasks in the docs &raquo;](https://nx.dev/docs/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Versioning and releasing
-
-To version and release the library use
+## How it works
 
 ```
-npx nx release
+browser :3000
+   |  /api/*  /media/*      (same-origin; the Next server proxies)
+   v
+frontend (Next.js)
+   |  docker network
+backend (Django :8000) ------> db (postgres)
+   |          |
+   |          +--> redis --> worker (Celery)
+   |                            |  POST /infer
+   |                            v
+   +---------------------> ai-service (FastAPI :8100)
+
+shared volume `media` -> /app/media in backend, worker, ai-service
 ```
 
-Pass `--dry-run` to see what would happen without actually releasing the library.
+Uploads are never processed in the request. Django writes the file to the shared
+volume, creates a `Job`, and queues a Celery task. The worker calls the AI service
+over HTTP, writes `Detection` rows, and flips the job to `done`. The browser polls
+`GET /api/jobs/{id}` every 2s until the job reaches a terminal state.
 
-[Learn more about Nx release &raquo;](https://nx.dev/docs/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Commands
 
-## Keep TypeScript project references up to date
+Everything runs in Docker; Nx wraps it.
 
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
+```bash
+pnpm dev                      # docker compose up
+pnpm dev:build                # rebuild images and start
+pnpm down                     # stop
+pnpm reset                    # stop AND delete the database + uploaded media
 
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
+pnpm nx run backend:test      # pytest
+pnpm nx run backend:lint      # ruff
+pnpm nx run backend:migrate
+pnpm nx run backend:makemigrations
+pnpm nx run backend:shell
 
-```sh
-npx nx sync
+pnpm nx run ai-service:test
+pnpm nx run ai-service:lint
+
+pnpm nx run frontend:build    # also type-checks
+pnpm nx run frontend:lint
+pnpm nx run frontend:test
+
+pnpm nx run api-types:generate  # re-export OpenAPI -> regenerate TS types
+pnpm nx run-many -t lint test   # everything
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+## API types are generated
 
-```sh
-npx nx sync:check
+The frontend does not hand-write API types. `drf-spectacular` exports the schema
+and `openapi-typescript` turns it into `libs/api-types`. **A backend field rename
+breaks the frontend build instead of production:**
+
+```bash
+pnpm nx run api-types:generate
 ```
 
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
+`libs/api-types/src/schema.ts` is generated and committed; never edit it by hand.
 
-## Nx Cloud
+## Swapping in the real model
 
-Nx Cloud ensures a [fast and scalable CI](https://nx.dev/nx-cloud?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) pipeline. It includes features such as:
+The AI service is the only part meant to be replaced.
 
-- [Remote caching](https://nx.dev/docs/features/ci-features/remote-cache?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task distribution across multiple machines](https://nx.dev/docs/features/ci-features/distribute-task-execution?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Automated e2e test splitting](https://nx.dev/docs/features/ci-features/split-e2e-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Task flakiness detection and rerunning](https://nx.dev/docs/features/ci-features/flaky-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+1. Read [docs/ai-contract.md](docs/ai-contract.md) — request/response shapes, path
+   conventions, error codes.
+2. Replace **`apps/ai-service/app/stub.py`**. Leave `app/main.py` and the Pydantic
+   models alone; they are the contract.
+3. Add dependencies to `apps/ai-service/pyproject.toml`, then regenerate the lock:
+   ```bash
+   docker run --rm -v "$PWD/apps/ai-service":/w -w /w \
+     ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim uv lock
+   ```
+4. `pnpm nx run ai-service:test` must still pass. Those tests assert the response
+   shape and that every referenced file exists on disk — not the invented plates.
 
-### Set up CI (non-Github Actions CI)
+**GPU:** Docker on Apple Silicon cannot access the GPU, so inside compose the
+service runs CPU-only. If that is too slow, run `ai-service` natively on the host
+and point the backend at it — no code change:
 
-**Note:** This is only required if your CI provider is not GitHub Actions.
-
-Use the following command to configure a CI workflow for your workspace:
-
-```sh
-npx nx g ci-workflow
+```
+AI_SERVICE_URL=http://host.docker.internal:8100
 ```
 
-[Learn more about Nx on CI](https://nx.dev/docs/features/ci-features?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Configuration
 
-## Install Nx Console
+All of it lives in `.env` (copy from `.env.example`). The ones worth knowing:
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+| Variable | Default | Notes |
+|---|---|---|
+| `MAX_UPLOAD_MB` | 200 | Enforced server-side and mirrored in the browser |
+| `AI_SERVICE_URL` | `http://ai-service:8100` | Point at the host to bypass Docker |
+| `AI_REQUEST_TIMEOUT_SECONDS` | 600 | Worker gives up after this |
+| `AI_RETRY_BACKOFF_SECONDS` | 5 | Doubles per retry (5s, 10s), 3 attempts total |
+| `STUB_DELAY_MS` | 1500 | Fake latency so the polling UI is visible. Stub only |
+| `STUB_MAX_FRAMES` | 8 | Frames sampled per video. Stub only |
 
-[Install Nx Console &raquo;](https://nx.dev/docs/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Troubleshooting
 
-## 🔗 Learn More
+**A URL 404s or redirects oddly after a code change.** Browsers cache 301s
+permanently. Hard-reload (⇧⌘R) before debugging anything else.
 
-- [Nx Documentation](https://nx.dev/docs)
-- [Crafting Your Workspace Tutorial](https://nx.dev/docs/getting-started/tutorials/crafting-your-workspace)
-- [Module Boundaries](https://nx.dev/docs/features/enforce-module-boundaries)
-- [Releasing Packages](https://nx.dev/docs/features/manage-releases)
-- [Nx Plugins](https://nx.dev/docs/concepts/nx-plugins)
-- [Nx Cloud](https://nx.dev/nx-cloud)
+**The frontend re-installs packages on every start.** Its `node_modules` lives in
+an anonymous volume, and compose preserves those across `--force-recreate`. After
+changing frontend dependencies:
 
-## 💬 Community
+```bash
+docker compose up -d --force-recreate --renew-anon-volumes frontend
+```
 
-Join the Nx community:
+**`uv sync` hangs during an image build.** Docker Desktop's build network is much
+slower than the host's. The Dockerfiles already set `UV_HTTP_TIMEOUT=300` and
+`UV_CONCURRENT_DOWNLOADS=2`; if it still stalls, retry — the BuildKit cache mount
+resumes rather than restarting.
 
-- [Discord](https://go.nx.dev/community)
-- [X (Twitter)](https://twitter.com/nxdevtools)
-- [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [YouTube](https://www.youtube.com/@nxdevtools)
-- [Blog](https://nx.dev/blog)
+**Jobs stay `queued` forever.** The worker is not running or cannot reach Redis:
+`docker compose logs worker`.
+
+**Jobs fail with "could not reach AI service".** `docker compose ps ai-service` —
+the worker retries twice with backoff before giving up.
+
+## Repository layout
+
+```
+apps/
+  frontend/     Next.js (App Router, Tailwind)
+  backend/      Django + DRF + Celery
+  ai-service/   FastAPI — the stub to be replaced
+libs/
+  api-types/    TypeScript types generated from the OpenAPI schema
+docs/
+  PLAN.md         phased build plan, with what actually happened
+  ai-contract.md  the frozen AI service contract
+```
+
+## Scope
+
+Deliberately not included: authentication, object storage, a production compose
+file, CI, and full annotated-video re-encoding. This is a local demo.

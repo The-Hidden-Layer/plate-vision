@@ -24,6 +24,7 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen
 
 COPY . .
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Non-root. /app/media is created and owned here so the named `media` volume
 # inherits that ownership when docker initialises it.
