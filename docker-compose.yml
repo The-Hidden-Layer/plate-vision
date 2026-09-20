@@ -1,0 +1,142 @@
+# plate-vision — development topology.
+#
+#   cp .env.example .env && docker compose up
+#
+# Infra (`db`, `redis`) runs today. The three application services below are
+# declared now but only build once their phase lands:
+#   backend / worker  -> Phase 2    ai-service -> Phase 3    frontend -> Phase 5
+# Until then, bring up what exists:  docker compose up db redis
+#
+# All source is bind-mounted for hot reload. Two consequences the Dockerfiles
+# must respect:
+#   * Python images install their venv at /opt/venv (UV_PROJECT_ENVIRONMENT),
+#     NOT inside /app — the bind mount would otherwise hide it.
+#   * The frontend keeps node_modules and .next in anonymous volumes so the
+#     host bind mount does not shadow what the image installed.
+
+name: plate-vision
+
+services:
+  # ---------------------------------------------------------------- infra --
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '5432:5432' # host access for psql / GUI clients
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save '' --appendonly no # demo broker: no persistence
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ------------------------------------------------------ application ------
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    command: python manage.py runserver 0.0.0.0:8000
+    env_file: .env
+    volumes:
+      - ./apps/backend:/app
+      - media:/app/media
+    ports:
+      - '8000:8000'
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/',timeout=3).status==200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    command: celery -A config worker --loglevel=info --concurrency=1
+    env_file: .env
+    volumes:
+      - ./apps/backend:/app
+      - media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+
+  ai-service:
+    build:
+      context: ./apps/ai-service
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8100 --reload
+    env_file: .env
+    volumes:
+      - ./apps/ai-service:/app
+      - media:/app/media
+    ports:
+      - '8100:8100'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8100/health',timeout=3).status==200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build:
+      context: . # repo root: needs pnpm-lock.yaml + pnpm-workspace.yaml
+      dockerfile: apps/frontend/Dockerfile
+    command: pnpm exec next dev --port 3000 --hostname 0.0.0.0
+    working_dir: /app/apps/frontend
+    environment:
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN}
+      WATCHPACK_POLLING: 'true' # reliable file watching across the bind mount
+    volumes:
+      - ./apps/frontend:/app/apps/frontend
+      - ./libs:/app/libs
+      - /app/node_modules # anonymous: keep the image's install
+      - /app/apps/frontend/node_modules
+      - /app/apps/frontend/.next
+    ports:
+      - '3000:3000'
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  media: # shared by backend, worker and ai-service at /app/media

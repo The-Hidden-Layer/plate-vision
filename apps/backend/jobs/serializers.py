@@ -1,0 +1,143 @@
+import uuid
+from pathlib import Path
+
+from django.conf import settings
+from rest_framework import serializers
+
+from .models import Detection, Job, MediaType
+
+IMAGE_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/bmp"}
+VIDEO_CONTENT_TYPES = {
+    "video/mp4",
+    "video/quicktime",
+    "video/x-msvideo",
+    "video/x-matroska",
+    "video/webm",
+}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+
+
+def resolve_media_type(content_type: str | None, filename: str) -> str | None:
+    """Classify an upload as image or video, or None if unsupported.
+
+    The browser-supplied content type is checked first and the extension is used
+    as a fallback, since some browsers send application/octet-stream for .mkv
+    and similar.
+    """
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct in IMAGE_CONTENT_TYPES:
+        return MediaType.IMAGE
+    if ct in VIDEO_CONTENT_TYPES:
+        return MediaType.VIDEO
+
+    ext = Path(filename).suffix.lower()
+    if ext in IMAGE_EXTENSIONS:
+        return MediaType.IMAGE
+    if ext in VIDEO_EXTENSIONS:
+        return MediaType.VIDEO
+    return None
+
+
+def _media_url(request, relative_path: str | None) -> str | None:
+    if not relative_path:
+        return None
+    url = f"{settings.MEDIA_URL}{relative_path.lstrip('/')}"
+    return request.build_absolute_uri(url) if request else url
+
+
+class DetectionSerializer(serializers.ModelSerializer):
+    crop_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Detection
+        fields = [
+            "id",
+            "plate_text",
+            "confidence",
+            "bbox",
+            "frame_index",
+            "timestamp_ms",
+            "crop_url",
+        ]
+
+    def get_crop_url(self, obj: Detection) -> str | None:
+        return _media_url(self.context.get("request"), obj.crop_path)
+
+
+class JobSerializer(serializers.ModelSerializer):
+    """Read shape returned by create, retrieve and list. The polling target."""
+
+    detections = DetectionSerializer(many=True, read_only=True)
+    media_url = serializers.SerializerMethodField()
+    annotated_frame_urls = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Job
+        fields = [
+            "id",
+            "status",
+            "media_type",
+            "source_filename",
+            "media_url",
+            "error",
+            "frame_count",
+            "annotated_frame_urls",
+            "detections",
+            "created_at",
+            "started_at",
+            "finished_at",
+        ]
+
+    def get_media_url(self, obj: Job) -> str | None:
+        return _media_url(self.context.get("request"), obj.media_path)
+
+    def get_annotated_frame_urls(self, obj: Job) -> list[str]:
+        request = self.context.get("request")
+        return [_media_url(request, p) for p in (obj.annotated_frames or [])]
+
+
+class JobCreateSerializer(serializers.Serializer):
+    """Accepts the multipart upload and persists it to the shared media volume."""
+
+    file = serializers.FileField(write_only=True)
+
+    def validate_file(self, upload):
+        max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+        if upload.size > max_bytes:
+            raise serializers.ValidationError(
+                f"File is {upload.size / 1024 / 1024:.1f} MB; the limit is "
+                f"{settings.MAX_UPLOAD_MB} MB."
+            )
+        if resolve_media_type(upload.content_type, upload.name) is None:
+            raise serializers.ValidationError(
+                "Unsupported file type. Upload an image "
+                f"({', '.join(sorted(IMAGE_EXTENSIONS))}) or a video "
+                f"({', '.join(sorted(VIDEO_EXTENSIONS))})."
+            )
+        return upload
+
+    def create(self, validated_data) -> Job:
+        upload = validated_data["file"]
+        media_type = resolve_media_type(upload.content_type, upload.name)
+
+        job_id = uuid.uuid4()
+        extension = Path(upload.name).suffix.lower()
+        relative_path = f"uploads/{job_id}{extension}"
+        destination = Path(settings.MEDIA_ROOT) / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        with destination.open("wb") as handle:
+            for chunk in upload.chunks():
+                handle.write(chunk)
+
+        return Job.objects.create(
+            id=job_id,
+            media_type=media_type,
+            source_filename=upload.name,
+            media_path=relative_path,
+        )
+
+
+class HealthSerializer(serializers.Serializer):
+    status = serializers.CharField()

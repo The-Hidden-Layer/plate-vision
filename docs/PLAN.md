@@ -185,36 +185,82 @@ Deviations from plan, all deliberate:
 ### Phase 1 — Compose topology
 **Goal:** all six services defined and the infra ones actually boot.
 
-- [ ] `docker-compose.yml`: `db`, `redis`, `backend`, `worker`, `ai-service`, `frontend`
-- [ ] Named volumes `pgdata`, `media`; `media` → `/app/media` in backend + worker + ai-service
-- [ ] Healthchecks on `db` and `redis`; `depends_on: condition: service_healthy`
-- [ ] Bind-mount source into all three app containers for hot reload
-- [ ] Port map: 3000 frontend, 8000 backend, 8100 ai-service, 5432 db (host debug)
+- [x] `docker-compose.yml`: `db`, `redis`, `backend`, `worker`, `ai-service`, `frontend`
+- [x] Named volumes `pgdata`, `media`; `media` → `/app/media` in backend + worker + ai-service
+- [x] Healthchecks on `db` and `redis`; `depends_on: condition: service_healthy`
+- [x] Bind-mount source into all three app containers for hot reload
+- [x] Port map: 3000 frontend, 8000 backend, 8100 ai-service, 5432 db (host debug)
 
 **Done when:** `docker compose up db redis` reports both healthy.
-**Requires:** Docker Desktop running — it is currently **not** running on this machine.
+**Requires:** Docker Desktop running.
+
+**Status: complete.** `docker compose up db redis` -> both healthy; verified
+Postgres 16.15 accepts the `.env` credentials, Redis answers `PONG`, and a file
+written to the `media` volume by one container is readable by another.
+
+Added beyond plan:
+- `.dockerignore` at the repo root — the frontend build context is the whole
+  monorepo, so without it every image build would ship `node_modules` and `.git`.
+- `.env` created from `.env.example` (gitignored).
+- Healthchecks also declared on `backend` (`/api/health/`) and `ai-service`
+  (`/health`), since `worker` gates on `ai-service: service_healthy`.
+  **Phase 2 owes Django an `/api/health/` endpoint** or `backend` never turns healthy.
+
+Two bind-mount hazards, documented in the compose header and binding on later phases:
+- Python venvs must live at `/opt/venv` (`UV_PROJECT_ENVIRONMENT`), not `/app` —
+  the source bind mount would hide an in-project `.venv`.
+- The frontend keeps `node_modules` and `.next` in anonymous volumes so the host
+  mount cannot shadow the image's pnpm install.
 
 ---
 
 ### Phase 2 — Django backend
 **Goal:** upload an image or video, get a `queued` Job back, poll it.
 
-- [ ] `pyproject.toml` (uv): django, djangorestframework, drf-spectacular, celery, redis, psycopg[binary], python-dotenv, gunicorn
-- [ ] Dockerfile: `uv sync --frozen`, non-root user, dev command `runserver 0.0.0.0:8000`
-- [ ] `config/settings.py` — env-driven, Postgres, `MEDIA_ROOT=/app/media`, Celery config
-- [ ] `config/celery.py` + app autodiscovery
-- [ ] `jobs` app: `Job` + `Detection` models, initial migration
-- [ ] Serializers: `JobCreateSerializer` (validates MIME + size, derives `media_type`), `JobDetailSerializer` (nested detections, absolute media URLs)
-- [ ] `JobViewSet` — create / retrieve / list
-- [ ] drf-spectacular at `/api/schema/` + `/api/docs/`
-- [ ] Dev media serving at `/media/`
-- [ ] pytest + pytest-django; tests for image upload, video upload, rejected file type, oversized file
+- [x] `pyproject.toml` (uv): django, djangorestframework, drf-spectacular, celery, redis, psycopg[binary], python-dotenv, gunicorn
+- [x] Dockerfile: `uv sync --frozen`, non-root user, dev command `runserver 0.0.0.0:8000`
+- [x] `config/settings.py` — env-driven, Postgres, `MEDIA_ROOT=/app/media`, Celery config
+- [x] `config/celery.py` + app autodiscovery
+- [x] `jobs` app: `Job` + `Detection` models, initial migration
+- [x] Serializers: `JobCreateSerializer` (validates MIME + size, derives `media_type`), `JobDetailSerializer` (nested detections, absolute media URLs)
+- [x] `JobViewSet` — create / retrieve / list
+- [x] `GET /api/health/` — required by the `backend` compose healthcheck (Phase 1)
+- [x] drf-spectacular at `/api/schema/` + `/api/docs/`
+- [x] Dev media serving at `/media/`
+- [x] pytest + pytest-django; tests for image upload, video upload, rejected file type, oversized file
 
 **Done when:**
 ```
 curl -F file=@sample.jpg http://localhost:8000/api/jobs/     # 201, status=queued
 curl http://localhost:8000/api/jobs/<id>/                     # 200
 ```
+
+**Status: complete.** 9 pytest tests pass; live API verified against the running
+stack — `POST /api/jobs/` with a JPEG returns `201 queued`, `GET /api/jobs/{id}/`
+returns `200`, video classified as `video`, unsupported type rejected `400`,
+uploaded media served back over `/media/`, `/api/docs/` and `/api/schema/` render,
+and the Celery app imports with the Redis broker configured.
+`backend` reaches compose health via `/api/health/`.
+
+Confirmed the Phase 1 hazards were handled:
+- Non-root uid 1000 can write to the shared `media` volume — the volume inherited
+  `app:app` from the image's `/app/media`. (Required deleting the root-owned volume
+  left behind by the Phase 1 probe; `docker volume rm plate-vision_media`.)
+- The venv at `/opt/venv` survives the `/app` bind mount.
+- `makemigrations` inside the container writes through to the host tree.
+
+Docker build networking needed tuning, kept in the Dockerfile:
+- `uv sync` stalled indefinitely on the 9.5 MB ruff wheel. The host pulls the same
+  file in 16s, so it is Docker Desktop's build network, not the lockfile or PyPI.
+  Fixed with `UV_HTTP_TIMEOUT=300`, `UV_CONCURRENT_DOWNLOADS=2` (default parallelism
+  saturates the VM's NAT) and a BuildKit cache mount so retries resume.
+  Expect the same in Phase 3 — the ai-service image reuses these settings.
+
+Deferred deliberately:
+- Task dispatch from `JobViewSet.create` is Phase 4; the comment marking the spot
+  is in `jobs/views.py`.
+- `apps/backend/project.json` is Phase 7, so commands are run via
+  `docker compose run --rm backend ...` for now.
 
 ---
 
@@ -306,7 +352,7 @@ gets to a working upload with no manual steps beyond copying `.env`.
 
 ## 5. Known constraints / risks
 
-- **Docker daemon is not currently running** on this machine. Phase 1 onward needs Docker Desktop started.
+- ~~Docker daemon not running~~ — started during Phase 1; `db` and `redis` verified healthy.
 - **No GPU in Docker on Apple Silicon.** When the real model arrives it runs CPU-only
   inside the container. `AI_SERVICE_URL` is env-driven precisely so `ai-service` can be
   run natively on the host and pointed at via `host.docker.internal:8100` if inference

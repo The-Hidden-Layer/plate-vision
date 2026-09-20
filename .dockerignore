@@ -1,0 +1,21 @@
+# Keep build contexts small and prevent host artifacts leaking into images.
+.git
+.github
+.vscode
+.nx
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+media
+**/media
+.env
+.env.local
+docs
+*.md
+!apps/**/README.md
