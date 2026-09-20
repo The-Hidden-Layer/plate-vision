@@ -125,6 +125,8 @@ services:
     working_dir: /app/apps/frontend
     environment:
       BACKEND_ORIGIN: ${BACKEND_ORIGIN}
+      # Surfaced to the browser so client-side validation matches the server.
+      NEXT_PUBLIC_MAX_UPLOAD_MB: ${MAX_UPLOAD_MB}
       WATCHPACK_POLLING: 'true' # reliable file watching across the bind mount
     volumes:
       - ./apps/frontend:/app/apps/frontend

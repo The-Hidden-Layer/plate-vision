@@ -316,16 +316,45 @@ hand-maintained). Both Python apps are lint-clean.
 ### Phase 4 — Wire the pipeline
 **Goal:** upload → Celery → AI → DB → `done`, with no frontend involved.
 
-- [ ] `jobs/ai_client.py` — httpx client, `AI_SERVICE_URL`, explicit timeout
-- [ ] `jobs/tasks.py::process_job` — `processing` → call AI → persist `Detection` rows,
+- [x] `jobs/ai_client.py` — httpx client, `AI_SERVICE_URL`, explicit timeout
+- [x] `jobs/tasks.py::process_job` — `processing` → call AI → persist `Detection` rows,
       `annotated_frames`, `frame_count`, `result_raw` → `done`
-- [ ] Failure path: connection error / non-2xx / timeout → `failed` + readable `Job.error`
-- [ ] Retries: 2 attempts with backoff on connection errors only, never on 4xx
-- [ ] Dispatch the task from `JobViewSet.create` (via `transaction.on_commit`)
-- [ ] Integration test with the AI service mocked
+- [x] Failure path: connection error / non-2xx / timeout → `failed` + readable `Job.error`
+- [x] Retries: 2 attempts with backoff on connection errors only, never on 4xx
+- [x] Dispatch the task from `JobViewSet.create` (via `transaction.on_commit`)
+- [x] Integration test with the AI service mocked
 
 **Done when:** after `POST /api/jobs/`, polling flips `queued → processing → done`
 and the detail response carries populated detections.
+
+**Status: complete.** 29 backend tests pass (9 API + 9 pipeline + 11 client); lint clean.
+
+Live done-when, full stack with the real worker:
+- Video upload -> `processing` within 0.5s -> `done` at ~1.6s, `frame_count=60`,
+  10 detections, 7 annotated frames, `error=""`, both timestamps set.
+- Image upload -> `done`, `frame_count=1`, `timestamp_ms=null`.
+
+Both failure paths exercised against the running stack, not just mocks:
+- **Permanent (4xx).** Uploaded undecodable bytes as `.jpg`. Job went `failed`
+  with the AI service's own message; worker log shows **exactly one attempt**.
+- **Transient (connection error).** Stopped `ai-service` mid-flight. Worker
+  retried at 5s then 10s and gave up after 3 attempts in 16s, with
+  `"... (gave up after 3 attempts)"` on `Job.error`. Restarting `ai-service`
+  restored normal operation with no intervention.
+
+Design notes:
+- `ai_client` owns the retryable/permanent split (`AIServiceUnavailable` vs
+  `AIServiceRejected`) so `tasks.py` never inspects status codes. 11 tests pin
+  the classification, including non-JSON 200 and body-text error fallback.
+- Dispatch uses `transaction.on_commit`, so the worker can never pick up a job
+  row that is not yet committed. A test asserts the callback fires with the job id.
+- `_persist` writes detections and the job update in one `transaction.atomic()`.
+- A malformed AI payload fails the job readably rather than 500-ing the worker.
+- `AI_RETRY_BACKOFF_SECONDS` (default 5) added to settings and `.env.example`.
+
+Known rough edge, for Phase 5 to handle in the UI: the AI service's error detail
+can include a container path (`/app/media/uploads/<id>.jpg`). Accurate, but the
+job page should present it as diagnostic text rather than a user-facing message.
 
 ---
 

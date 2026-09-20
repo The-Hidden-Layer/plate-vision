@@ -39,11 +39,17 @@ def resolve_media_type(content_type: str | None, filename: str) -> str | None:
     return None
 
 
-def _media_url(request, relative_path: str | None) -> str | None:
+def _media_url(relative_path: str | None) -> str | None:
+    """Root-relative URL, e.g. /media/jobs/<id>/frames/0012.jpg.
+
+    Deliberately NOT absolute. The browser reaches this API through the Next.js
+    rewrites proxy, so Django sees Host: backend:8000 and build_absolute_uri
+    would hand the browser a hostname it cannot resolve. A root-relative URL is
+    correct both through the proxy and when calling Django directly.
+    """
     if not relative_path:
         return None
-    url = f"{settings.MEDIA_URL}{relative_path.lstrip('/')}"
-    return request.build_absolute_uri(url) if request else url
+    return f"{settings.MEDIA_URL}{relative_path.lstrip('/')}"
 
 
 class DetectionSerializer(serializers.ModelSerializer):
@@ -62,7 +68,7 @@ class DetectionSerializer(serializers.ModelSerializer):
         ]
 
     def get_crop_url(self, obj: Detection) -> str | None:
-        return _media_url(self.context.get("request"), obj.crop_path)
+        return _media_url(obj.crop_path)
 
 
 class JobSerializer(serializers.ModelSerializer):
@@ -90,11 +96,10 @@ class JobSerializer(serializers.ModelSerializer):
         ]
 
     def get_media_url(self, obj: Job) -> str | None:
-        return _media_url(self.context.get("request"), obj.media_path)
+        return _media_url(obj.media_path)
 
     def get_annotated_frame_urls(self, obj: Job) -> list[str]:
-        request = self.context.get("request")
-        return [_media_url(request, p) for p in (obj.annotated_frames or [])]
+        return [_media_url(p) for p in (obj.annotated_frames or [])]
 
 
 class JobCreateSerializer(serializers.Serializer):

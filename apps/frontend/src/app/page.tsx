@@ -1,10 +1,14 @@
-export default function Home() {
+import { UploadForm } from '../components/UploadForm';
+
+export default function UploadPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-3 p-8">
-      <h1 className="text-2xl font-semibold">plate-vision</h1>
-      <p className="text-sm text-neutral-500">
-        License plate detection &amp; recognition demo. Upload UI arrives in Phase 5.
+    <div className="mx-auto max-w-xl">
+      <h1 className="text-2xl font-semibold tracking-tight">Detect license plates</h1>
+      <p className="mt-2 mb-8 text-sm text-neutral-600 dark:text-neutral-400">
+        Upload an image or a video. It is queued for processing and you can watch the
+        result appear.
       </p>
-    </main>
+      <UploadForm />
+    </div>
   );
 }

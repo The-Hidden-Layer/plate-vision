@@ -97,6 +97,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 # --- DRF -----------------------------------------------------------------
 REST_FRAMEWORK = {
+    # No auth in this demo. Explicitly empty so a Django admin session in the
+    # same browser cannot trigger SessionAuthentication's CSRF check on uploads.
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
@@ -121,6 +124,8 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 # --- AI service (consumed in Phase 4) ------------------------------------
 AI_SERVICE_URL = os.environ.get("AI_SERVICE_URL", "http://ai-service:8100")
 AI_REQUEST_TIMEOUT_SECONDS = int(os.environ.get("AI_REQUEST_TIMEOUT_SECONDS", "600"))
+# Base delay for retrying transient AI failures; doubles each attempt.
+AI_RETRY_BACKOFF_SECONDS = int(os.environ.get("AI_RETRY_BACKOFF_SECONDS", "5"))
 
 LOGGING = {
     "version": 1,

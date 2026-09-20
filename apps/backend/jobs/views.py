@@ -1,3 +1,4 @@
+from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import api_view
@@ -6,6 +7,7 @@ from rest_framework.response import Response
 
 from .models import Job
 from .serializers import HealthSerializer, JobCreateSerializer, JobSerializer
+from .tasks import process_job
 
 
 @extend_schema(
@@ -36,7 +38,8 @@ class JobViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         job = serializer.save()
-        # Phase 4 dispatches the Celery task here.
+        # Only queue once the row is actually visible to the worker.
+        transaction.on_commit(lambda: process_job.delay(str(job.id)))
         return Response(
             JobSerializer(job, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,

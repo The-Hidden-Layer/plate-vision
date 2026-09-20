@@ -61,13 +61,13 @@ def test_oversized_upload_is_rejected(api, settings):
     assert Job.objects.count() == 0
 
 
-def test_retrieve_returns_absolute_media_url(api):
+def test_retrieve_returns_root_relative_media_url(api):
     job_id = upload(api, "car.png", "image/png").json()["id"]
 
     response = api.get(f"/api/jobs/{job_id}/")
 
     assert response.status_code == 200
-    assert response.json()["media_url"].endswith(f"/media/uploads/{job_id}.png")
+    assert response.json()["media_url"] == f"/media/uploads/{job_id}.png"
 
 
 def test_list_is_newest_first(api):
