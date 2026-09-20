@@ -14,7 +14,6 @@ import random
 from pathlib import Path
 
 import cv2
-import numpy as np
 from PIL import Image, ImageDraw
 
 from .config import Settings
@@ -148,12 +147,14 @@ def _run_video(
 
         detections: list[dict] = []
         annotated_frames: list[str] = []
+        read_any = False
 
         for frame_index in sample_indices:
             capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ok, frame = capture.read()
             if not ok or frame is None:
                 continue
+            read_any = True
             image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             frame_detections, frame_rel = _detect_in_frame(
                 image,
@@ -168,10 +169,8 @@ def _run_video(
             if frame_rel:
                 annotated_frames.append(frame_rel)
 
-        if not annotated_frames and not detections:
-            # Decoded fine but every sampled read failed - treat as undecodable.
-            if not any(True for _ in sample_indices):
-                raise UndecodableMedia("no frames could be read")
+        if not read_any:
+            raise UndecodableMedia("no frames could be read")
 
         return {
             "frame_count": total,
@@ -198,4 +197,4 @@ def run(*, job_id: str, media_type: str, source: Path, settings: Settings) -> di
     return result
 
 
-__all__ = ["UndecodableMedia", "run", "np"]
+__all__ = ["UndecodableMedia", "run"]

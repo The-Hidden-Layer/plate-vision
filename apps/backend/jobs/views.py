@@ -8,7 +8,10 @@ from .models import Job
 from .serializers import HealthSerializer, JobCreateSerializer, JobSerializer
 
 
-@extend_schema(responses=HealthSerializer, description="Liveness probe for the compose healthcheck.")
+@extend_schema(
+    responses=HealthSerializer,
+    description="Liveness probe for the compose healthcheck.",
+)
 @api_view(["GET"])
 def health(_request):
     return Response({"status": "ok"})

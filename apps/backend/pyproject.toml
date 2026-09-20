@@ -31,6 +31,8 @@ testpaths = ["jobs/tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Django writes these; they are not hand-maintained source.
+extend-exclude = ["*/migrations/*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

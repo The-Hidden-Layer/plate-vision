@@ -267,15 +267,15 @@ Deferred deliberately:
 ### Phase 3 — AI service stub
 **Goal:** a real, working `/infer` that produces genuine crops and annotated frames.
 
-- [ ] `pyproject.toml` (uv): fastapi, uvicorn, pydantic, pillow, opencv-python-headless
-- [ ] Dockerfile; dev command `uvicorn app.main:app --reload --host 0.0.0.0 --port 8100`
-- [ ] Pydantic request/response models matching §4.3 exactly
-- [ ] `stub.py`: **actually decodes** the media (Pillow for images, OpenCV for video),
+- [x] `pyproject.toml` (uv): fastapi, uvicorn, pydantic, pillow, opencv-python-headless
+- [x] Dockerfile; dev command `uvicorn app.main:app --reload --host 0.0.0.0 --port 8100`
+- [x] Pydantic request/response models matching §4.3 exactly
+- [x] `stub.py`: **actually decodes** the media (Pillow for images, OpenCV for video),
       samples up to N frames, invents a plausible bbox + plate string per frame,
       writes real cropped JPEGs and boxed annotated JPEGs to `/app/media/jobs/<id>/`
-- [ ] Configurable fake latency (`STUB_DELAY_MS`) so the polling UI is observable
-- [ ] `/health`
-- [ ] Tests: image path, video path, missing file → 4xx
+- [x] Configurable fake latency (`STUB_DELAY_MS`) so the polling UI is observable
+- [x] `/health`
+- [x] Tests: image path, video path, missing file → 4xx
 
 **Why a decoding stub and not hardcoded JSON:** the UI renders real images, frame
 indices and timings are real, and the replacement only swaps the detector — the
@@ -283,6 +283,33 @@ I/O, paths and response shape are already exercised.
 
 **Done when:** `curl -X POST ai-service:8100/infer -d '{...}'` returns detections
 and the referenced JPEGs exist on the shared volume.
+
+**Status: complete.** 9 contract tests pass. Live done-when: a real 60-frame MP4
+uploaded through Django, then `POST localhost:8100/infer` -> `200` in 1.6s with
+`frame_count=60`, 8 detections and 7 annotated frames. All 14 referenced files
+were confirmed present **from inside the backend container** and served over HTTP
+at `/media/...` — the shared volume works in both directions. Image path verified
+separately: `frame_count=1`, `timestamp_ms=null`. Annotated JPEGs inspected
+visually: green box plus plate label, legible at UI size.
+
+Notes:
+- Boxes are at random positions, not on the actual plate. That is the point of a
+  stub — it decodes and writes real files, it does not detect.
+- Output is deterministic per `job_id` (RNG seeded from it), so re-running a job
+  gives identical results. There is a test for this.
+- A video's plates recur across sampled frames (one or two "vehicles" per clip)
+  rather than being random per frame, so the UI has realistic data to group.
+- Added beyond plan: path-traversal rejection on `media_path`, and tests for
+  determinism, relative-path compliance and `media_type` validation.
+- `libglib2.0-0` is required in the image; `opencv-python-headless` still needs it.
+- The Phase 2 uv network tuning was carried over and the image built first try,
+  despite OpenCV being far larger than anything in the backend.
+
+Error codes match the contract: missing file `404`, undecodable `422`, traversal
+`400` — all 4xx, so the Phase 4 worker must not retry them.
+
+Also fixed here: ruff now excludes `*/migrations/*` (Django-generated, not
+hand-maintained). Both Python apps are lint-clean.
 
 ---
 
