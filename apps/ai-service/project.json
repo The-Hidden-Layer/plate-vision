@@ -6,7 +6,10 @@
   "targets": {
     "serve": {
       "executor": "nx:run-commands",
-      "options": { "cwd": "{workspaceRoot}", "command": "docker compose up ai-service" },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose up ai-service"
+      },
       "cache": false
     },
     "test": {
@@ -26,6 +29,15 @@
       },
       "inputs": ["python"],
       "cache": true
+    },
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm --no-deps -T ai-service python -c \"import json; from app.main import app; print(json.dumps(app.openapi(), indent=2))\" > libs/api-types/ai-openapi.json"
+      },
+      "outputs": ["{workspaceRoot}/libs/api-types/ai-openapi.json"],
+      "cache": false
     }
   }
 }

@@ -27,9 +27,19 @@ First run builds four images and takes a few minutes. Then:
 |---|---|
 | http://localhost:3000 | The app — upload here |
 | http://localhost:3000/jobs | Recent jobs |
-| http://localhost:8000/api/docs | Swagger UI |
+| http://localhost:8000/api/docs | **Swagger UI — backend API** |
+| http://localhost:8000/api/redoc | ReDoc — same schema, reference layout |
+| http://localhost:8000/api/schema | Raw OpenAPI 3.1 (YAML; add `?format=json`) |
 | http://localhost:8000/admin | Django admin (`nx run backend:shell` to make a user) |
-| http://localhost:8100/health | AI service |
+| http://localhost:8100/docs | **Swagger UI — AI service** |
+| http://localhost:8100/redoc | ReDoc — same schema, reference layout |
+| http://localhost:8100/openapi.json | Raw OpenAPI 3.1 |
+| http://localhost:8100/health | AI service liveness |
+
+The backend's docs are also reachable through the Next proxy at
+http://localhost:3000/api/docs, since it forwards all of `/api`. The AI service
+is internal — only the worker calls it — so it has no proxied route; reach its
+docs on :8100 directly.
 
 Migrations are applied automatically when `backend` starts.
 
@@ -80,6 +90,7 @@ pnpm nx run frontend:lint
 pnpm nx run frontend:test
 
 pnpm nx run api-types:generate  # re-export OpenAPI -> regenerate TS types
+pnpm nx run ai-service:openapi  # export the AI service schema to libs/api-types/ai-openapi.json
 pnpm nx run-many -t lint test   # everything
 ```
 
@@ -129,8 +140,11 @@ All of it lives in `.env` (copy from `.env.example`). The ones worth knowing:
 | `AI_SERVICE_URL` | `http://ai-service:8100` | Point at the host to bypass Docker |
 | `AI_REQUEST_TIMEOUT_SECONDS` | 600 | Worker gives up after this |
 | `AI_RETRY_BACKOFF_SECONDS` | 5 | Doubles per retry (5s, 10s), 3 attempts total |
+| `LPD_BACKEND` | `stub` | Detection stage: `stub`, or `model` for `app/lpd/model.py` |
+| `LPR_BACKEND` | `stub` | Recognition stage: `stub`, or `model` for `app/lpr/model.py` |
+| `LPD_WEIGHTS` / `LPR_WEIGHTS` | — | Paths inside the container, e.g. `/app/weights/lpd/best.pt` |
+| `MAX_FRAMES` | 8 | Frames sampled per video (old name `STUB_MAX_FRAMES` still works) |
 | `STUB_DELAY_MS` | 1500 | Fake latency so the polling UI is visible. Stub only |
-| `STUB_MAX_FRAMES` | 8 | Frames sampled per video. Stub only |
 
 ## Troubleshooting
 

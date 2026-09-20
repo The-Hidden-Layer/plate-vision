@@ -160,3 +160,17 @@ class JobCreateSerializer(serializers.Serializer):
 
 class HealthSerializer(serializers.Serializer):
     status = serializers.CharField()
+
+
+class ValidationErrorSerializer(serializers.Serializer):
+    """Shape of DRF's 400 body, so the schema documents the failure case too.
+
+    DRF keys validation errors by field name; the only writable field here is
+    `file`, so that is the only key an upload can fail on.
+    """
+
+    file = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        help_text="Reasons the upload was rejected: too large, or an unsupported type.",
+    )

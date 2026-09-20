@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Liveness probe for the compose healthcheck. */
+        /**
+         * Liveness probe
+         * @description Used by the compose healthcheck. Answers as soon as Django is serving; it does not touch the database, Redis or the AI service.
+         */
         get: operations["health_retrieve"];
         put?: never;
         post?: never;
@@ -28,10 +31,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Upload media, then poll the job until it is done or failed. */
+        /**
+         * List jobs
+         * @description Newest first, paginated 20 per page via the `page` query parameter.
+         */
         get: operations["jobs_list"];
         put?: never;
-        /** @description Upload media, then poll the job until it is done or failed. */
+        /**
+         * Upload media and queue a job
+         * @description `multipart/form-data` with a single `file` part — an image (.jpg/.jpeg/.png/.webp/.bmp) or a video (.mp4/.mov/.avi/.mkv/.webm). Returns the job in `queued` state; poll `GET /api/jobs/{id}` for the result.
+         */
         post: operations["jobs_create"];
         delete?: never;
         options?: never;
@@ -46,7 +55,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Upload media, then poll the job until it is done or failed. */
+        /**
+         * Retrieve a job
+         * @description The polling target. Re-request until `status` is `done` or `failed`; `detections` and `annotated_frame_urls` are only populated once `done`.
+         */
         get: operations["jobs_retrieve"];
         put?: never;
         post?: never;
@@ -127,6 +139,16 @@ export interface components {
          * @enum {string}
          */
         StatusEnum: "queued" | "processing" | "done" | "failed";
+        /**
+         * @description Shape of DRF's 400 body, so the schema documents the failure case too.
+         *
+         *     DRF keys validation errors by field name; the only writable field here is
+         *     `file`, so that is the only key an upload can fail on.
+         */
+        ValidationError: {
+            /** @description Reasons the upload was rejected: too large, or an unsupported type. */
+            file?: string[];
+        };
     };
     responses: never;
     parameters: never;
@@ -199,6 +221,14 @@ export interface operations {
                     "application/json": components["schemas"]["Job"];
                 };
             };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationError"];
+                };
+            };
         };
     };
     jobs_retrieve: {
@@ -206,7 +236,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A UUID string identifying this job. */
+                /** @description Job UUID returned by the upload. */
                 id: string;
             };
             cookie?: never;

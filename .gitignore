@@ -80,5 +80,12 @@ media/
 apps/backend/media/
 apps/ai-service/media/
 
+# Model weights (LPD/LPR) — too big for git; see apps/ai-service/weights/README.md
+apps/ai-service/weights/**
+!apps/ai-service/weights/README.md
+!apps/ai-service/weights/*/
+!apps/ai-service/weights/**/.gitkeep
+
 # Generated API types (regenerate with: nx run api-types:generate)
 libs/api-types/openapi.json
+libs/api-types/ai-openapi.json

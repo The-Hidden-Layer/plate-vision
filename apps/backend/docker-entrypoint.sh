@@ -4,7 +4,10 @@
 # waits for backend to become healthy instead, so migrations never race.
 set -e
 
-echo "[entrypoint] applying migrations…"
-python manage.py migrate --noinput
+# Both go to stderr on purpose. They are progress logs, and stdout has to stay
+# clean for `docker compose run` commands whose output is piped to a file —
+# `nx run backend:openapi` redirects stdout straight into openapi.json.
+echo "[entrypoint] applying migrations…" >&2
+python manage.py migrate --noinput >&2
 
 exec "$@"

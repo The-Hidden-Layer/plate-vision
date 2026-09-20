@@ -114,26 +114,45 @@ it fails the job. Respond within it or reject the input up front.
 ## 4. `GET /health`
 
 ```json
-{ "status": "ok", "model": "stub" }
+{ "status": "ok", "model": "lpd:stub+lpr:stub" }
 ```
 
 Used by the compose healthcheck. Must not depend on the database or the media
-volume. Set `model` to something identifying the real weights once they land.
+volume. `model` is built from each stage's `name`, so set those to something
+identifying the real weights once they land.
 
 ## 5. How to take this over
 
 The repo ships a **working stub** at `apps/ai-service` that really decodes the media
 (Pillow for images, OpenCV for video), samples frames, and writes genuine crops and
-annotated JPEGs — with invented plate strings. It exists so the full pipeline is
-demoable before the model arrives.
+annotated JPEGs — with invented boxes and plate strings. It exists so the full
+pipeline is demoable before the models arrive.
 
-To replace it:
+Inference is split into two stages, developed independently:
 
-1. Replace **`apps/ai-service/app/stub.py`** with the real inference.
-2. Leave **`app/main.py`** and the Pydantic models alone — they are the contract.
-3. Add your dependencies to `apps/ai-service/pyproject.toml` (`uv add ...`).
-4. The existing tests in `apps/ai-service/tests/` must still pass. They assert the
-   response shape and that every referenced file actually exists on disk.
+```
+app/main.py      HTTP, the frozen contract — do not touch
+app/pipeline.py  decode, sample, crop, annotate — model-agnostic glue
+app/lpd/         ★ detection  — where are the plates      (model.py, README.md)
+app/lpr/         ★ recognition — what do they say         (model.py, README.md)
+```
+
+Per sampled frame the pipeline runs LPD, cuts out each box, and runs LPR on the
+crop. The reported `confidence` is the product of the two stage scores.
+
+To replace the stubs:
+
+1. Write the detector in **`app/lpd/model.py`** and the recognizer in
+   **`app/lpr/model.py`**; each package's `README.md` spells out its contract.
+2. Switch the stage on with `LPD_BACKEND=model` / `LPR_BACKEND=model` (and
+   `LPD_WEIGHTS` / `LPR_WEIGHTS`). The two are independent — a real detector can
+   run against the stub recognizer while the other half is in progress.
+3. Leave **`app/main.py`** and the Pydantic models alone — they are the contract.
+   `app/pipeline.py` owns all file writing; model code never touches disk.
+4. Add your dependencies to `apps/ai-service/pyproject.toml` (`uv add ...`).
+5. The existing tests in `apps/ai-service/tests/` must still pass. `test_infer.py`
+   asserts the response shape and that every referenced file exists on disk;
+   `test_stages.py` asserts the LPD→LPR seam with fake stages.
 
 ### One thing to know up front
 

@@ -6,7 +6,10 @@
   "targets": {
     "serve": {
       "executor": "nx:run-commands",
-      "options": { "cwd": "{workspaceRoot}", "command": "docker compose up backend worker" },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose up backend worker"
+      },
       "cache": false
     },
     "migrate": {
@@ -35,7 +38,10 @@
     },
     "test": {
       "executor": "nx:run-commands",
-      "options": { "cwd": "{workspaceRoot}", "command": "docker compose run --rm backend pytest" },
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm backend pytest"
+      },
       "inputs": ["python"],
       "cache": true
     },
@@ -52,7 +58,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "{workspaceRoot}",
-        "command": "docker compose run --rm --no-deps -T backend python manage.py spectacular --format openapi-json > libs/api-types/openapi.json"
+        "command": "docker compose run --rm --no-deps -T --entrypoint \"\" backend python manage.py spectacular --format openapi-json --fail-on-warn > libs/api-types/openapi.json"
       },
       "outputs": ["{workspaceRoot}/libs/api-types/openapi.json"],
       "cache": false

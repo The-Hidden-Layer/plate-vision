@@ -107,10 +107,38 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "plate-vision API",
-    "DESCRIPTION": "License plate detection and recognition demo.",
+    "DESCRIPTION": (
+        "License plate detection and recognition demo.\n\n"
+        "Upload an image or a video to `POST /api/jobs`; the response is a job in "
+        "`queued` state. A Celery worker hands the media to the AI service and "
+        "writes the results back, so poll `GET /api/jobs/{id}` until `status` is "
+        "`done` or `failed`.\n\n"
+        "All media URLs in responses (`media_url`, `crop_url`, `annotated_frame_urls`) "
+        "are root-relative, so they resolve both against this origin and through the "
+        "Next.js proxy on port 3000.\n\n"
+        "There is no authentication in this demo."
+    ),
     "VERSION": "0.1.0",
+    # The browsable schema endpoint is an implementation detail, not API surface.
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": "/api",
+    "SORT_OPERATIONS": False,
+    "TAGS": [
+        {"name": "jobs", "description": "Submit media and poll for detection results."},
+        {"name": "health", "description": "Liveness probe used by the compose healthcheck."},
+    ],
+    # Both origins work: 3000 is the Next.js proxy the browser uses, 8000 is
+    # Django directly. Listing both keeps Swagger's "Try it out" usable either way.
+    "SERVERS": [
+        {"url": "http://localhost:3000", "description": "Through the Next.js proxy"},
+        {"url": "http://localhost:8000", "description": "Django directly"},
+    ],
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "displayRequestDuration": True,
+        "docExpansion": "list",
+    },
 }
 
 # --- Celery --------------------------------------------------------------
