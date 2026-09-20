@@ -17,7 +17,7 @@ pytestmark = pytest.mark.django_db
 
 def upload(api, name="traffic.mp4", content_type="video/mp4"):
     return api.post(
-        "/api/jobs/",
+        "/api/jobs",
         {"file": SimpleUploadedFile(name, b"x" * 1024, content_type=content_type)},
         format="multipart",
     )
@@ -61,7 +61,7 @@ def test_detail_response_carries_detections(api, eager_celery, ai_payload):
     with patch.object(ai_client, "infer", return_value=ai_payload):
         process_job(job_id)
 
-    body = api.get(f"/api/jobs/{job_id}/").json()
+    body = api.get(f"/api/jobs/{job_id}").json()
 
     assert body["status"] == "done"
     assert len(body["detections"]) == 2

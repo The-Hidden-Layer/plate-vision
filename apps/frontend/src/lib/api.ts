@@ -18,20 +18,20 @@ export async function uploadMedia(file: File, signal?: AbortSignal): Promise<Job
   const form = new FormData();
   form.append('file', file);
 
-  const response = await fetch('/api/jobs/', { method: 'POST', body: form, signal });
+  const response = await fetch('/api/jobs', { method: 'POST', body: form, signal });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }
 
 export async function fetchJob(id: string, signal?: AbortSignal): Promise<Job> {
-  const response = await fetch(`/api/jobs/${id}/`, { signal, cache: 'no-store' });
+  const response = await fetch(`/api/jobs/${id}`, { signal, cache: 'no-store' });
   if (response.status === 404) throw new Error('That job does not exist.');
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }
 
 export async function fetchJobs(signal?: AbortSignal): Promise<Paginated<Job>> {
-  const response = await fetch('/api/jobs/', { signal, cache: 'no-store' });
+  const response = await fetch('/api/jobs', { signal, cache: 'no-store' });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }

@@ -10,14 +10,14 @@ pytestmark = pytest.mark.django_db
 
 def upload(api, name: str, content_type: str, size: int = 1024):
     return api.post(
-        "/api/jobs/",
+        "/api/jobs",
         {"file": SimpleUploadedFile(name, b"x" * size, content_type=content_type)},
         format="multipart",
     )
 
 
 def test_health_needs_no_database(client):
-    assert client.get("/api/health/").json() == {"status": "ok"}
+    assert client.get("/api/health").json() == {"status": "ok"}
 
 
 def test_image_upload_creates_queued_job(api, settings):
@@ -64,7 +64,7 @@ def test_oversized_upload_is_rejected(api, settings):
 def test_retrieve_returns_root_relative_media_url(api):
     job_id = upload(api, "car.png", "image/png").json()["id"]
 
-    response = api.get(f"/api/jobs/{job_id}/")
+    response = api.get(f"/api/jobs/{job_id}")
 
     assert response.status_code == 200
     assert response.json()["media_url"] == f"/media/uploads/{job_id}.png"
@@ -74,12 +74,12 @@ def test_list_is_newest_first(api):
     first = upload(api, "a.jpg", "image/jpeg").json()["id"]
     second = upload(api, "b.jpg", "image/jpeg").json()["id"]
 
-    results = api.get("/api/jobs/").json()["results"]
+    results = api.get("/api/jobs").json()["results"]
 
     assert [r["id"] for r in results] == [second, first]
 
 
 def test_openapi_schema_is_generated(client):
-    response = client.get("/api/schema/")
+    response = client.get("/api/schema")
     assert response.status_code == 200
     assert b"plate-vision API" in response.content
