@@ -1,39 +1,18 @@
-// Hand-written for now. Phase 6 replaces these with types generated from the
-// backend's OpenAPI schema (libs/api-types); the shape is intentionally identical.
+/**
+ * Re-exports the generated API types so components import from one place.
+ * The source of truth is the backend's OpenAPI schema; regenerate with
+ * `pnpm nx run api-types:generate`.
+ */
 
-export type JobStatus = 'queued' | 'processing' | 'done' | 'failed';
-export type MediaType = 'image' | 'video';
+import type { JobStatus } from '@org/api-types';
 
-export interface Detection {
-  id: number;
-  plate_text: string;
-  confidence: number;
-  bbox: [number, number, number, number];
-  frame_index: number;
-  timestamp_ms: number | null;
-  crop_url: string | null;
-}
+export type {
+  Detection,
+  Job,
+  JobStatus,
+  MediaType,
+  PaginatedJobList,
+} from '@org/api-types';
 
-export interface Job {
-  id: string;
-  status: JobStatus;
-  media_type: MediaType;
-  source_filename: string;
-  media_url: string | null;
-  error: string;
-  frame_count: number | null;
-  annotated_frame_urls: string[];
-  detections: Detection[];
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-}
-
-export interface Paginated<T> {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
-}
-
+/** A job in a terminal state can no longer change, so polling can stop. */
 export const isTerminal = (status: JobStatus) => status === 'done' || status === 'failed';

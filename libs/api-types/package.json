@@ -1,0 +1,29 @@
+{
+  "name": "@org/api-types",
+  "version": "0.0.1",
+  "private": true,
+  "description": "TypeScript types generated from the backend's OpenAPI schema",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts"
+    }
+  },
+  "nx": {
+    "name": "api-types",
+    "projectType": "library",
+    "targets": {
+      "generate": {
+        "executor": "nx:run-commands",
+        "dependsOn": ["backend:openapi"],
+        "options": {
+          "cwd": "{workspaceRoot}",
+          "command": "pnpm exec openapi-typescript libs/api-types/openapi.json --output libs/api-types/src/schema.ts"
+        },
+        "inputs": ["{workspaceRoot}/libs/api-types/openapi.json"],
+        "outputs": ["{projectRoot}/src/schema.ts"],
+        "cache": false
+      }
+    }
+  }
+}

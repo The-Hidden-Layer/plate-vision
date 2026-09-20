@@ -54,6 +54,15 @@ def _media_url(relative_path: str | None) -> str | None:
 
 class DetectionSerializer(serializers.ModelSerializer):
     crop_url = serializers.SerializerMethodField()
+    # Declared explicitly so the OpenAPI schema says number[4] rather than the
+    # shapeless "unknown" a plain JSONField produces.
+    bbox = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=4,
+        max_length=4,
+        read_only=True,
+        help_text="[x1, y1, x2, y2] pixel coords, top-left origin",
+    )
 
     class Meta:
         model = Detection
@@ -66,6 +75,7 @@ class DetectionSerializer(serializers.ModelSerializer):
             "timestamp_ms",
             "crop_url",
         ]
+        read_only_fields = fields
 
     def get_crop_url(self, obj: Detection) -> str | None:
         return _media_url(obj.crop_path)
@@ -94,6 +104,10 @@ class JobSerializer(serializers.ModelSerializer):
             "started_at",
             "finished_at",
         ]
+        # This serializer is never used for writes. Declaring that makes the
+        # generated OpenAPI schema mark every field as always-present, instead
+        # of optional-because-the-model-has-a-default.
+        read_only_fields = fields
 
     def get_media_url(self, obj: Job) -> str | None:
         return _media_url(obj.media_path)

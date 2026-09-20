@@ -1,4 +1,4 @@
-import type { Job, Paginated } from './types';
+import type { Job, PaginatedJobList } from './types';
 
 /** Pull a readable message out of a DRF error body. */
 async function errorMessage(response: Response): Promise<string> {
@@ -30,7 +30,7 @@ export async function fetchJob(id: string, signal?: AbortSignal): Promise<Job> {
   return response.json();
 }
 
-export async function fetchJobs(signal?: AbortSignal): Promise<Paginated<Job>> {
+export async function fetchJobs(signal?: AbortSignal): Promise<PaginatedJobList> {
   const response = await fetch('/api/jobs', { signal, cache: 'no-store' });
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();

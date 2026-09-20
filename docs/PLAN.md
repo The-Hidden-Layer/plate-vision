@@ -361,18 +361,55 @@ job page should present it as diagnostic text rather than a user-facing message.
 ### Phase 5 — Frontend
 **Goal:** the demo a human can actually drive.
 
-- [ ] `next.config.js` rewrites: `/api/:p*` and `/media/:p*` → `http://backend:8000`
-- [ ] Dockerfile; dev command `next dev`
-- [ ] `/` — drag-and-drop accepting `image/*` and `video/*`, client-side size check,
+- [x] `next.config.js` rewrites: `/api/:p*` and `/media/:p*` → `http://backend:8000`
+- [x] Dockerfile; dev command `next dev`
+- [x] `/` — drag-and-drop accepting `image/*` and `video/*`, client-side size check,
       inline error display, POST then route to the job page
-- [ ] `/jobs/[id]` — client component polling every 2s while `queued|processing`;
+- [x] `/jobs/[id]` — client component polling every 2s while `queued|processing`;
       stops on `done|failed`; status pill; error banner on failure
-- [ ] Results: **detection table** (plate · confidence · frame/timestamp · crop `<img>`)
+- [x] Results: **detection table** (plate · confidence · frame/timestamp · crop `<img>`)
       and **annotated frames gallery**
-- [ ] `/jobs` — recent jobs list
-- [ ] Empty / loading / failed states for each page
+- [x] `/jobs` — recent jobs list
+- [x] Empty / loading / failed states for each page
 
 **Done when:** drop a clip at `localhost:3000`, watch it progress, see plates and frames.
+
+**Status: complete.** Driven in a real browser end to end: dropped a video on the
+upload page, watched it upload, landed on the job page, and saw `Done · 60 frames ·
+processed in 1.6 s` with a 10-row detection table (plate, confidence bar, frame,
+timestamp, crop thumbnail) and a 7-image annotated gallery. Verified the jobs list
+with all four statuses, the failed-job page, client-side validation rejecting a
+.txt, light and dark themes, and mobile at 375px. Hot reload confirmed working
+across the bind mount in both directions. Frontend lint/test/build pass;
+backend 29 tests + lint; ai-service 9 tests.
+
+**Two backend changes this phase forced, both real bugs:**
+
+1. **Media URLs had to become root-relative.** `build_absolute_uri` produced
+   `http://backend:8000/media/...` because the Next proxy sets `Host: backend:8000`.
+   The browser cannot resolve `backend`, so every crop and frame would have been a
+   broken image. Now `/media/...`, correct through the proxy and directly.
+2. **Trailing slashes.** Next strips them when proxying, so `/api/jobs/` reached
+   Django as `/api/jobs`, `APPEND_SLASH` redirected back, and the request looped
+   forever (curl: 50 redirects). Neither `skipTrailingSlashRedirect` nor
+   `trailingSlash: true` fixed it — Next normalises the path before interpolating
+   `:path*`. Resolved by aligning the API on Next's convention:
+   `DefaultRouter(trailing_slash=False)`, and `/api/health`, `/api/schema`,
+   `/api/docs`. The compose healthcheck, frontend client and tests moved with it.
+   This removes the mismatch rather than patching around it.
+
+Also: `DEFAULT_AUTHENTICATION_CLASSES = []`, so a Django admin session in the same
+browser cannot trigger DRF's CSRF check on uploads.
+
+**Gotcha for anyone who used the app during the broken window:** browsers cache
+301s aggressively, so a stale `/api/jobs` redirect survives the fix. A hard reload
+clears it. Worth a line in the Phase 7 README.
+
+Frontend structure: `src/lib` (types, api client, formatters), `src/components`
+(StatusPill, DetectionTable, FrameGallery, UploadForm), pages `/`, `/jobs`,
+`/jobs/[id]`. Polling stops on a terminal status; the list stops refreshing when
+nothing is in flight. `src/lib/types.ts` is deliberately shaped to match what
+Phase 6 will generate.
 
 ---
 

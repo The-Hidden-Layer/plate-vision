@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "backend",
+  "projectType": "application",
+  "sourceRoot": "apps/backend",
+  "targets": {
+    "openapi": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "docker compose run --rm --no-deps -T backend python manage.py spectacular --format openapi-json > libs/api-types/openapi.json"
+      },
+      "outputs": ["{workspaceRoot}/libs/api-types/openapi.json"],
+      "cache": false
+    }
+  }
+}
