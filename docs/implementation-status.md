@@ -1,6 +1,6 @@
 # Implementation and training status
 
-Updated 2026-09-23 at 10:10 UTC. This phase is **in progress**, not accepted as complete. The
+Updated 2026-09-23 at 10:23 UTC. This phase is **in progress**, not accepted as complete.
 user chose Mac training, then requested augmentation and quick YOLO training
 on 2026-09-23 in the task “Fix unreadable plate recognition.” That newer request
 supersedes the previous long-run continuation. A task follow-up checks progress
@@ -125,9 +125,22 @@ before launching or resuming anything; do not create duplicate training runs.
   and has a separate optimizer/output directory. Its checksum is
   `61b8d1cd9401576037aa8be2cfc3b6ef96c37e7a55d709975147ca7850a3ddae`.
   See [the quick-training report](reports/lpd-quick-augmentation-20260923.md).
-  Serving weights are unchanged. Matched full-pipeline MPS validation has started
-  with the preserved reference at 1280 / FP32, before comparing this candidate.
+  Serving weights are unchanged. Fourteen full-pipeline MPS validation profiles
+  are complete: both detectors at 640/960/1280 in FP32/FP16, plus two stricter
+  confidence thresholds for the augmented 960/FP32 candidate. The augmented
+  960/FP32 profile at confidence 0.35 passes all accuracy gates (precision
+  0.878661, recall 0.987461, small recall 0.988166, exact frames 0.88), versus
+  reference values 0.868421 / 0.982759 / 0.976331 / 0.8768. Benchmarks and final
+  test evaluation are pending. See [the comparison report](reports/mps-validation-comparison-20260923.md).
   Results are under `artifacts/reports/mps-profile-comparison-20260923/`.
+- YOLO26n: the planned speed candidate started on 2026-09-23 at 10:20 UTC,
+  respecting the newer **three-epoch maximum**, at 640 pixels / batch 16 with
+  one generated variant per training image, on the same grouped source split.
+  Output: `artifacts/lpd-nano-quick-20260923/yolo26n/`; log:
+  `artifacts/lpd-nano-quick-20260923.log`. Check actual processes and the saved
+  `nano-training-state.json` in the comparison report directory before any launch.
+  Verified trainer PID **25713**, with an idle-sleep assertion tied to that PID.
+  No inference benchmarks may compete with training.
 - An earlier detector launch used a relative Ultralytics output directory. It
   was stopped, its orphan process terminated, and partial files moved into
   `artifacts/aborted-lpd/`. That run must not be resumed or promoted.
@@ -154,7 +167,7 @@ that Nx loads from the root environment and requires real model backends.
 
 The service uses the completed production LPR checkpoint and an immutable
 **interim** YOLO snapshot in `artifacts/app-preview-20260921-0925/`, on CPU while
-MPS trains. Weight hashes are recorded in that directory's `manifest.json`.
+MPS validation compares the saved production candidates. Weight hashes are recorded in that directory's `manifest.json`.
 The old `artifacts/integration-snapshot/` remains preserved. Install the final
 evaluated detector/profile before calling this the final deployment.
 
