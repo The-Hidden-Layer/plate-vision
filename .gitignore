@@ -89,3 +89,11 @@ apps/ai-service/weights/**
 # Generated API types (regenerate with: nx run api-types:generate)
 libs/api-types/openapi.json
 libs/api-types/ai-openapi.json
+
+# Local ML datasets, reproducible derived data, and experiment artifacts
+/LPD/
+/LPR/
+.pnpm-store/
+apps/ai-service/artifacts/
+apps/ai-service/*.pt
+apps/ai-service/runs/

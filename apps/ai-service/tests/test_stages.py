@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from app import pipeline
 from app.config import get_settings
 from app.lpd import PlateBox, PlateDetector, get_detector
 from app.lpr import PlateRead, PlateRecognizer, get_recognizer
@@ -41,11 +40,12 @@ class FixedRecognizer(PlateRecognizer):
 
 
 @pytest.fixture
-def use_stages(monkeypatch):
+def use_stages(monkeypatch, client):
     """Swap both stages for the pair given, as LPD_BACKEND/LPR_BACKEND would."""
 
     def _use(detector: PlateDetector, recognizer: PlateRecognizer):
-        monkeypatch.setattr(pipeline, "get_models", lambda settings: (detector, recognizer))
+        monkeypatch.setattr(client.app.state.runtime, "detector", detector)
+        monkeypatch.setattr(client.app.state.runtime, "recognizer", recognizer)
 
     return _use
 
@@ -70,7 +70,7 @@ def test_lpr_reads_the_crop_lpd_asked_for(client, media_root: Path, sample_image
     assert (media_root / detection["crop_path"]).is_file()
 
 
-def test_unreadable_plate_is_dropped(client, media_root: Path, sample_image, use_stages):
+def test_unreadable_plate_keeps_crop(client, media_root: Path, sample_image, use_stages):
     use_stages(
         FixedDetector([PlateBox(bbox=(10, 20, 110, 60), confidence=0.9)]),
         FixedRecognizer(""),  # LPR says: there is a plate, but I cannot read it
@@ -81,8 +81,11 @@ def test_unreadable_plate_is_dropped(client, media_root: Path, sample_image, use
         json={"job_id": "unreadable", "media_path": sample_image, "media_type": "image"},
     ).json()
 
-    assert body["detections"] == []
-    assert body["annotated_frames"] == [], "nothing to annotate without a reading"
+    assert len(body["detections"]) == 1
+    assert body["detections"][0]["plate_text"] == ""
+    assert body["detections"][0]["confidence"] == 0
+    assert (media_root / body["detections"][0]["crop_path"]).is_file()
+    assert body["annotated_frames"]
 
 
 def test_out_of_frame_boxes_are_clamped_and_degenerate_ones_dropped(
@@ -118,7 +121,8 @@ def test_video_runs_the_detector_once_per_sampled_frame(
     ).json()
 
     assert detector.seen == sorted(set(detector.seen)), "each frame visited once, in order"
-    assert len(detector.seen) <= 4, "STUB_MAX_FRAMES/MAX_FRAMES caps the sampling"
+    assert detector.seen == [0, 5, 10, 15, 20, 25], "two frames per second across the full clip"
+    assert body["video_analysis"] == {"sample_fps": 2.0, "sampled_frame_count": 6}
     assert len(body["annotated_frames"]) == len(detector.seen)
 
 

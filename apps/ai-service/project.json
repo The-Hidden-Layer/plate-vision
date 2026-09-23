@@ -10,7 +10,17 @@
         "cwd": "{workspaceRoot}",
         "command": "docker compose up ai-service"
       },
-      "cache": false
+      "cache": false,
+      "configurations": {
+        "native": {
+          "cwd": "{workspaceRoot}/apps/ai-service",
+          "command": ".venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8100 --workers 1"
+        },
+        "trained-local": {
+          "cwd": "{workspaceRoot}/apps/ai-service",
+          "command": ".venv/bin/python -m app.serve_local"
+        }
+      }
     },
     "test": {
       "executor": "nx:run-commands",
@@ -18,8 +28,16 @@
         "cwd": "{workspaceRoot}",
         "command": "docker compose run --rm --no-deps ai-service pytest"
       },
-      "inputs": ["python"],
-      "cache": true
+      "inputs": [
+        "python"
+      ],
+      "cache": true,
+      "configurations": {
+        "native": {
+          "cwd": "{workspaceRoot}/apps/ai-service",
+          "command": ".venv/bin/python -m pytest"
+        }
+      }
     },
     "lint": {
       "executor": "nx:run-commands",
@@ -27,8 +45,16 @@
         "cwd": "{workspaceRoot}",
         "command": "docker compose run --rm --no-deps ai-service ruff check ."
       },
-      "inputs": ["python"],
-      "cache": true
+      "inputs": [
+        "python"
+      ],
+      "cache": true,
+      "configurations": {
+        "native": {
+          "cwd": "{workspaceRoot}/apps/ai-service",
+          "command": ".venv/bin/ruff check ."
+        }
+      }
     },
     "openapi": {
       "executor": "nx:run-commands",
@@ -36,8 +62,95 @@
         "cwd": "{workspaceRoot}",
         "command": "docker compose run --rm --no-deps -T ai-service python -c \"import json; from app.main import app; print(json.dumps(app.openapi(), indent=2))\" > libs/api-types/ai-openapi.json"
       },
-      "outputs": ["{workspaceRoot}/libs/api-types/ai-openapi.json"],
-      "cache": false
+      "outputs": [
+        "{workspaceRoot}/libs/api-types/ai-openapi.json"
+      ],
+      "cache": false,
+      "configurations": {
+        "native": {
+          "command": "apps/ai-service/.venv/bin/python -c \"import json, sys; sys.path.insert(0, 'apps/ai-service'); from app.main import app; print(json.dumps(app.openapi(), indent=2))\" > libs/api-types/ai-openapi.json"
+        }
+      }
+    },
+    "prepare": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.prepare"
+      }
+    },
+    "train-lpd": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.train_lpd"
+      }
+    },
+    "train-lpr": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.train_lpr"
+      }
+    },
+    "evaluate": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.evaluate"
+      }
+    },
+    "export": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.export"
+      }
+    },
+    "benchmark": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.benchmark"
+      }
+    },
+    "select-profile": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.select_profile"
+      }
+    },
+    "verify-lpr-export": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.verify_lpr_export"
+      }
+    },
+    "compare-enhancement": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.compare_enhancement"
+      }
+    },
+    "evaluate-lpr": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{workspaceRoot}/apps/ai-service",
+        "command": ".venv/bin/python -m training.evaluate_lpr"
+      }
     }
   }
 }

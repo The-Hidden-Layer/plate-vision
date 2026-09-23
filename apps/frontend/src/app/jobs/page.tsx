@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { StatusPill } from '../../components/StatusPill';
 import { fetchJobs } from '../../lib/api';
+import { recognizedDetections } from '../../lib/detections';
 import { formatRelative } from '../../lib/format';
 import { isTerminal, type Job } from '../../lib/types';
 
@@ -76,7 +77,7 @@ export default function JobsPage() {
                   <p className="truncate text-sm font-medium">{job.source_filename}</p>
                   <p className="mt-0.5 text-xs text-neutral-500">
                     {job.media_type} · {formatRelative(job.created_at)}
-                    {job.status === 'done' && ` · ${job.detections.length} plates`}
+                    {job.status === 'done' && ` · ${recognizedDetections(job.detections).length} recognized plates`}
                   </p>
                 </div>
                 <StatusPill status={job.status} />

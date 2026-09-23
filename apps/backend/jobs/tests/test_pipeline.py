@@ -67,6 +67,20 @@ def test_detail_response_carries_detections(api, eager_celery, ai_payload):
     assert len(body["detections"]) == 2
     assert body["detections"][0]["crop_url"].endswith("/media/jobs/x/crops/0012_0.jpg")
     assert body["annotated_frame_urls"][0].endswith("/media/jobs/x/frames/0012.jpg")
+    assert body["video_analysis"] is None  # older AI responses remain supported
+
+
+def test_video_coverage_is_persisted_and_returned_without_a_migration(
+    api, eager_celery, ai_payload
+):
+    job_id = make_job(api)
+    ai_payload["video_analysis"] = {"sample_fps": 2.0, "sampled_frame_count": 5}
+    with patch.object(ai_client, "infer", return_value=ai_payload):
+        process_job(job_id)
+
+    body = api.get(f"/api/jobs/{job_id}").json()
+    assert body["frame_count"] == 60
+    assert body["video_analysis"] == ai_payload["video_analysis"]
 
 
 def test_4xx_fails_immediately_without_retrying(api, eager_celery):
@@ -138,3 +152,20 @@ def test_status_is_processing_while_the_ai_runs(api, eager_celery, ai_payload):
         process_job(job_id)
 
     assert observed["status"] == JobStatus.PROCESSING
+
+
+def test_persian_and_unreadable_detections_round_trip(api, ai_payload, db):
+    from jobs.models import Job
+    from jobs.tasks import _persist
+
+    job = Job.objects.create(
+        media_type="image", source_filename="frame.jpg", media_path="uploads/frame.jpg"
+    )
+    ai_payload["detections"][0]["plate_text"] = "12الف34567"
+    ai_payload["detections"][1]["plate_text"] = ""
+    ai_payload["detections"][1]["confidence"] = 0.0
+    _persist(job, ai_payload)
+    response = api.get(f"/api/jobs/{job.id}")
+    assert response.status_code == 200
+    assert [d["plate_text"] for d in response.data["detections"]] == ["12الف34567", ""]
+    assert all(d["crop_url"].startswith("/media/") for d in response.data["detections"])

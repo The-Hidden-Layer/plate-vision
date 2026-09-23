@@ -21,7 +21,9 @@
       "{projectRoot}/pyproject.toml",
       "{projectRoot}/uv.lock",
       "{projectRoot}/Dockerfile",
-      "{workspaceRoot}/docker-compose.yml"
+      "{projectRoot}/app/assets/**/*",
+      "{projectRoot}/project.json",
+      "{workspaceRoot}/docker-compose*.yml"
     ]
   },
   "plugins": [

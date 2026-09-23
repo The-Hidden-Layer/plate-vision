@@ -42,8 +42,16 @@
         "cwd": "{workspaceRoot}",
         "command": "docker compose run --rm backend pytest"
       },
-      "inputs": ["python"],
-      "cache": true
+      "inputs": [
+        "python"
+      ],
+      "cache": true,
+      "configurations": {
+        "native": {
+          "cwd": "{workspaceRoot}/apps/backend",
+          "command": ".venv/bin/python -m pytest --ds=config.test_settings"
+        }
+      }
     },
     "lint": {
       "executor": "nx:run-commands",
@@ -51,8 +59,16 @@
         "cwd": "{workspaceRoot}",
         "command": "docker compose run --rm --no-deps backend ruff check ."
       },
-      "inputs": ["python"],
-      "cache": true
+      "inputs": [
+        "python"
+      ],
+      "cache": true,
+      "configurations": {
+        "native": {
+          "cwd": "{workspaceRoot}/apps/backend",
+          "command": ".venv/bin/ruff check ."
+        }
+      }
     },
     "openapi": {
       "executor": "nx:run-commands",
@@ -60,7 +76,9 @@
         "cwd": "{workspaceRoot}",
         "command": "docker compose run --rm --no-deps -T --entrypoint \"\" backend python manage.py spectacular --format openapi-json --fail-on-warn > libs/api-types/openapi.json"
       },
-      "outputs": ["{workspaceRoot}/libs/api-types/openapi.json"],
+      "outputs": [
+        "{workspaceRoot}/libs/api-types/openapi.json"
+      ],
       "cache": false
     }
   }

@@ -1,8 +1,4 @@
-"""Wire format for the AI service.
-
-This is the contract in docs/ai-contract.md. The real model replaces stub.py;
-these models and main.py stay as they are.
-"""
+"""Stable shared-volume schemas and additive versioned image API schemas."""
 
 from typing import Literal
 
@@ -38,9 +34,19 @@ class Detection(BaseModel):
     crop_path: str = Field(description="Path relative to MEDIA_ROOT of the cropped plate.")
 
 
+class VideoAnalysis(BaseModel):
+    sample_fps: float = Field(
+        gt=0, description="Target analysis rate; never duplicates source frames"
+    )
+    sampled_frame_count: int = Field(
+        ge=0, description="Number of frames actually passed to the models"
+    )
+
+
 class InferResponse(BaseModel):
     media_type: MediaType
     frame_count: int = Field(ge=0, description="1 for images")
+    video_analysis: VideoAnalysis | None = None
     detections: list[Detection]
     annotated_frames: list[str] = Field(
         description="Paths relative to MEDIA_ROOT of the frames written with boxes drawn on."
@@ -73,3 +79,28 @@ class UnprocessableResponse(BaseModel):
     """
 
     detail: str | list[ValidationErrorItem]
+
+
+class CropImage(BaseModel):
+    mime_type: Literal["image/png"] = "image/png"
+    width: int
+    height: int
+    data_base64: str
+
+
+class ImageDetection(BaseModel):
+    bbox: tuple[int, int, int, int]
+    detection_confidence: float = Field(ge=0, le=1)
+    plate_text: str | None = None
+    recognition_confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    crop: CropImage | None = None
+
+
+class ImageResponse(BaseModel):
+    request_id: str
+    width: int
+    height: int
+    model: str
+    detections: list[ImageDetection]
+    timings_ms: dict[str, float]

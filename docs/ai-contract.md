@@ -1,7 +1,7 @@
 # AI Service Contract
 
-**Status: frozen.** The backend is built against this. Changing it means changing
-the Django worker, so propose changes before implementing them.
+**Status: `/infer` and `/health` wire formats remain stable.** Additive image
+endpoints and runtime diagnostics are documented in [model-workflow.md](model-workflow.md).
 
 This is everything the model team needs. You own one container, `ai-service`,
 and it must speak exactly this.
@@ -11,10 +11,11 @@ and it must speak exactly this.
 ## 1. What you implement
 
 A single HTTP service listening on **port 8100** with two endpoints: `POST /infer`
-and `GET /health`. Nothing else. No database, no queue, no auth.
+and `GET /health`, plus the versioned image endpoints. No database or external queue.
 
 The Django Celery worker calls `/infer` once per job and waits for the response.
-Requests are serialized one job at a time — you do not need internal queueing.
+The worker submits one job at a time. A bounded inference worker schedules each
+video frame separately alongside live image requests; overload returns retryable 503.
 
 ## 2. Shared filesystem
 
@@ -78,8 +79,18 @@ exist when you are called.
 |---|---|---|
 | `media_type` | string | Echo the request |
 | `frame_count` | int | Frames in the source. **`1` for images** |
+| `video_analysis` | object \| null | Videos: `sample_fps` (target rate) and `sampled_frame_count` (actual model calls). Null for images and older results |
 | `detections` | array | May be empty — that is a successful job with no plates found |
-| `annotated_frames` | string[] | Source frames with boxes drawn, newest-first not required. Keep it small (≤ ~12); this is a preview gallery, not every frame |
+| `annotated_frames` | string[] | Sampled source frames with detected regions drawn; empty frames are omitted. The frontend loads gallery images lazily |
+
+Video jobs scan the whole timeline at `VIDEO_SAMPLE_FPS` (default **2**), starting
+at time zero. `MAX_FRAMES` and `STUB_MAX_FRAMES` are retired and do not cap the
+scan. Sequential decoding avoids unreliable random seeks and estimated frame
+counts in variable-frame-rate screen recordings. Sampling and detection times
+use the decoder's presentation timestamps, falling back to the source frame rate
+when timestamps are missing. A gap in a recording does not duplicate frames.
+`frame_count` is the number of source frames actually decoded; it can differ from
+a container's estimate. Crops and model inference run only for selected frames.
 
 **Detection object**
 
@@ -131,7 +142,7 @@ pipeline is demoable before the models arrive.
 Inference is split into two stages, developed independently:
 
 ```
-app/main.py      HTTP, the frozen contract — do not touch
+app/main.py      stable job contract and additive image endpoints
 app/pipeline.py  decode, sample, crop, annotate — model-agnostic glue
 app/lpd/         ★ detection  — where are the plates      (model.py, README.md)
 app/lpr/         ★ recognition — what do they say         (model.py, README.md)
@@ -147,7 +158,7 @@ To replace the stubs:
 2. Switch the stage on with `LPD_BACKEND=model` / `LPR_BACKEND=model` (and
    `LPD_WEIGHTS` / `LPR_WEIGHTS`). The two are independent — a real detector can
    run against the stub recognizer while the other half is in progress.
-3. Leave **`app/main.py`** and the Pydantic models alone — they are the contract.
+3. Preserve the existing `/infer` request and response schemas when evolving the service.
    `app/pipeline.py` owns all file writing; model code never touches disk.
 4. Add your dependencies to `apps/ai-service/pyproject.toml` (`uv add ...`).
 5. The existing tests in `apps/ai-service/tests/` must still pass. `test_infer.py`

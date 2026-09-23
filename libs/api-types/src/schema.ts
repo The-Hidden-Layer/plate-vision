@@ -96,6 +96,7 @@ export interface components {
             readonly media_url: string | null;
             readonly error: string;
             readonly frame_count: number | null;
+            readonly video_analysis: components["schemas"]["VideoAnalysis"] | null;
             readonly annotated_frame_urls: string[];
             readonly detections: components["schemas"]["Detection"][];
             /** Format: date-time */
@@ -148,6 +149,11 @@ export interface components {
         ValidationError: {
             /** @description Reasons the upload was rejected: too large, or an unsupported type. */
             file?: string[];
+        };
+        VideoAnalysis: {
+            /** Format: double */
+            readonly sample_fps: number;
+            readonly sampled_frame_count: number;
         };
     };
     responses: never;

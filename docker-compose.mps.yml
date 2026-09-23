@@ -1,0 +1,22 @@
+# Run the AI service natively; all file-based jobs share this host directory.
+# docker compose -f docker-compose.yml -f docker-compose.mps.yml up -d backend worker frontend
+services:
+  ai-service:
+    profiles: [container-ai]
+  backend:
+    environment:
+      AI_SERVICE_URL: http://host.docker.internal:8100
+    volumes:
+      - ./media:/app/media
+  worker:
+    environment:
+      AI_SERVICE_URL: http://host.docker.internal:8100
+    volumes:
+      - ./media:/app/media
+    depends_on: !override
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
