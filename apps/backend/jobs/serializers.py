@@ -81,12 +81,20 @@ class DetectionSerializer(serializers.ModelSerializer):
         return _media_url(obj.crop_path)
 
 
+class VideoAnalysisSerializer(serializers.Serializer):
+    sample_fps = serializers.FloatField(read_only=True)
+    sampled_frame_count = serializers.IntegerField(read_only=True)
+
+
 class JobSerializer(serializers.ModelSerializer):
     """Read shape returned by create, retrieve and list. The polling target."""
 
     detections = DetectionSerializer(many=True, read_only=True)
     media_url = serializers.SerializerMethodField()
     annotated_frame_urls = serializers.SerializerMethodField()
+    video_analysis = VideoAnalysisSerializer(
+        source="result_raw.video_analysis", read_only=True, allow_null=True, default=None
+    )
 
     class Meta:
         model = Job
@@ -98,6 +106,7 @@ class JobSerializer(serializers.ModelSerializer):
             "media_url",
             "error",
             "frame_count",
+            "video_analysis",
             "annotated_frame_urls",
             "detections",
             "created_at",

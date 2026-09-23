@@ -1,23 +1,21 @@
 """LPR — license plate **recognition**: read the characters off a crop.
 
     base.py    the interface the pipeline calls (PlateRecognizer, PlateRead)
-    model.py   ★ where the real recognition model goes
-    stub.py    placeholder that invents plate strings, used until model.py works
+    model.py   batched LPRNet/CTC recognition
+    stub.py    deterministic demo/test recognizer
 
-Which one runs is `LPR_BACKEND` ('stub' by default, 'model' for yours).
+Which one runs is `LPR_BACKEND` ('stub' for demos, 'model' for trained weights).
 """
 
 from __future__ import annotations
 
-from functools import cache
 from pathlib import Path
 
 from .base import PlateRead, PlateRecognizer
 
 
-@cache
-def get_recognizer(backend: str, weights: str | None = None) -> PlateRecognizer:
-    """Build the recognizer named by `backend`, once per process."""
+def get_recognizer(backend: str, weights: str | None = None, **options) -> PlateRecognizer:
+    """Build the recognizer named by `backend`, for the lifespan-owned worker."""
     if backend == "stub":
         from .stub import StubRecognizer
 
@@ -25,7 +23,7 @@ def get_recognizer(backend: str, weights: str | None = None) -> PlateRecognizer:
     if backend == "model":
         from .model import PlateRecognizerModel
 
-        return PlateRecognizerModel(weights=Path(weights) if weights else None)
+        return PlateRecognizerModel(weights=Path(weights) if weights else None, **options)
     raise ValueError(f"unknown LPR_BACKEND: {backend!r} (expected 'stub' or 'model')")
 
 

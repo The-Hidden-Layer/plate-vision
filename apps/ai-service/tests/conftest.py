@@ -13,15 +13,18 @@ from app.main import app
 def media_root(tmp_path: Path, monkeypatch) -> Path:
     root = tmp_path / "media"
     (root / "uploads").mkdir(parents=True)
+    monkeypatch.setenv("LPD_BACKEND", "stub")
+    monkeypatch.setenv("LPR_BACKEND", "stub")
     monkeypatch.setenv("MEDIA_ROOT", str(root))
     monkeypatch.setenv("STUB_DELAY_MS", "0")
-    monkeypatch.setenv("STUB_MAX_FRAMES", "4")
+    monkeypatch.setenv("VIDEO_SAMPLE_FPS", "2")
     return root
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client(media_root) -> TestClient:
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture

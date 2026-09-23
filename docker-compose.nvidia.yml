@@ -1,0 +1,22 @@
+# Requires NVIDIA Container Toolkit and a driver compatible with the locked PyTorch wheel.
+# docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up --build
+services:
+  ai-service:
+    build:
+      args:
+        INSTALL_ML: 'true'
+        INSTALL_TENSORRT: ${INSTALL_TENSORRT:-false}
+    gpus: all
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8100 --workers 1
+    environment:
+      AI_DEVICE: cuda:0
+      AI_PRECISION: ${AI_PRECISION:-fp32}
+      LPD_BACKEND: model
+      LPR_BACKEND: model
+      LPD_WEIGHTS: ${LPD_WEIGHTS:-/app/weights/lpd/best.pt}
+      LPR_WEIGHTS: ${LPR_WEIGHTS:-/app/weights/lpr/best.pt}
+      STUB_DELAY_MS: '0'
+      YOLO_CONFIG_DIR: /tmp/ultralytics
+      MPLCONFIGDIR: /tmp/matplotlib
+    healthcheck:
+      start_period: 120s

@@ -19,3 +19,8 @@ media
 docs
 *.md
 !apps/**/README.md
+LPD
+LPR
+.pnpm-store
+**/artifacts
+**/runs

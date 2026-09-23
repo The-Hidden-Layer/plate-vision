@@ -6,7 +6,10 @@ import { use, useEffect, useState } from 'react';
 import { DetectionTable } from '../../../components/DetectionTable';
 import { FrameGallery } from '../../../components/FrameGallery';
 import { StatusPill } from '../../../components/StatusPill';
+import { VideoCoverage } from '../../../components/VideoCoverage';
+import { VideoResults } from '../../../components/VideoResults';
 import { fetchJob } from '../../../lib/api';
+import { recognizedDetections } from '../../../lib/detections';
 import { formatDuration } from '../../../lib/format';
 import { isTerminal, type Job } from '../../../lib/types';
 
@@ -62,6 +65,7 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
 
   const duration = formatDuration(job.started_at, job.finished_at);
   const busy = !isTerminal(job.status);
+  const recognized = recognizedDetections(job.detections);
 
   return (
     <div className="flex flex-col gap-8">
@@ -70,9 +74,12 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
           <h1 className="truncate text-xl font-semibold tracking-tight">{job.source_filename}</h1>
           <p className="mt-1 text-sm text-neutral-500">
             {job.media_type}
-            {job.frame_count ? ` · ${job.frame_count} frames` : ''}
+            {job.media_type === 'video' && job.frame_count ? ` · ${job.frame_count} source frames` : ''}
             {duration ? ` · processed in ${duration}` : ''}
           </p>
+          {job.media_type === 'video' && job.status === 'done' && (
+            <VideoCoverage analysis={job.video_analysis} />
+          )}
         </div>
         <StatusPill status={job.status} />
       </header>
@@ -108,17 +115,38 @@ export default function JobPage({ params }: { params: Promise<{ id: string }> })
         </p>
       )}
 
+      {job.media_type === 'video' && (job.media_url ? (
+        <VideoResults
+          key={job.id}
+          src={job.media_url}
+          detections={job.detections}
+          sampleFps={job.video_analysis?.sample_fps}
+          status={job.status}
+        />
+      ) : (
+        <p className="text-sm text-neutral-500">The original video is unavailable for playback.</p>
+      ))}
+
       {job.status === 'done' && (
         <>
-          <section>
+          {job.media_type === 'video' ? (
+            <details className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+              <summary className="cursor-pointer text-sm font-semibold">
+                All recognized plates ({recognized.length})
+              </summary>
+              <div className="mt-4"><DetectionTable detections={recognized} /></div>
+            </details>
+          ) : <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
-              Detections{' '}
-              <span className="font-normal normal-case">({job.detections.length})</span>
+              Recognized plates{' '}
+              <span className="font-normal normal-case">
+                ({recognized.length})
+              </span>
             </h2>
-            <DetectionTable detections={job.detections} />
-          </section>
+            <DetectionTable detections={recognized} />
+          </section>}
 
-          {job.annotated_frame_urls.length > 0 && (
+          {job.media_type === 'image' && job.annotated_frame_urls.length > 0 && (
             <section>
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500">
                 Annotated frames{' '}

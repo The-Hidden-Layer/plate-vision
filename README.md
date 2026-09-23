@@ -5,9 +5,9 @@ watch it process, see the plates.
 
 Nx monorepo · Next.js frontend · Django backend · FastAPI AI service · Docker.
 
-> The AI model is developed elsewhere. This repo ships a **stub** behind a frozen
-> HTTP contract so the whole pipeline runs today; the real model is a drop-in
-> replacement. See [docs/ai-contract.md](docs/ai-contract.md).
+> The AI service supports YOLO detection and Iranian LPRNet recognition, plus
+> explicit stub backends for demos. Train and evaluate models before enabling
+> real inference. See [the model workflow](docs/model-workflow.md).
 
 ---
 
@@ -16,8 +16,13 @@ Nx monorepo · Next.js frontend · Django backend · FastAPI AI service · Docke
 Prerequisites: **Docker Desktop** (running) and nothing else. Node and Python are
 only needed if you want to run Nx commands outside Docker.
 
+The example configuration uses **demo stubs**: their boxes and plate strings are
+generated placeholders. For actual plate readings, use the trained deployment
+in [the model workflow](docs/model-workflow.md). Keep an existing `.env` when
+restarting an already configured installation.
+
 ```bash
-cp .env.example .env
+cp -n .env.example .env
 docker compose up
 ```
 
@@ -106,29 +111,12 @@ pnpm nx run api-types:generate
 
 `libs/api-types/src/schema.ts` is generated and committed; never edit it by hand.
 
-## Swapping in the real model
+## Real Iranian plate models
 
-The AI service is the only part meant to be replaced.
-
-1. Read [docs/ai-contract.md](docs/ai-contract.md) — request/response shapes, path
-   conventions, error codes.
-2. Replace **`apps/ai-service/app/stub.py`**. Leave `app/main.py` and the Pydantic
-   models alone; they are the contract.
-3. Add dependencies to `apps/ai-service/pyproject.toml`, then regenerate the lock:
-   ```bash
-   docker run --rm -v "$PWD/apps/ai-service":/w -w /w \
-     ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim uv lock
-   ```
-4. `pnpm nx run ai-service:test` must still pass. Those tests assert the response
-   shape and that every referenced file exists on disk — not the invented plates.
-
-**GPU:** Docker on Apple Silicon cannot access the GPU, so inside compose the
-service runs CPU-only. If that is too slow, run `ai-service` natively on the host
-and point the backend at it — no code change:
-
-```
-AI_SERVICE_URL=http://host.docker.internal:8100
-```
+See [the model workflow](docs/model-workflow.md) for dataset preparation, YOLO26
+and LPRNet training, the image upload endpoints, native MPS/NVIDIA deployment,
+checkpoint export, and accuracy-preserving runtime selection. The existing
+Django/Celery upload flow uses those same models through `/infer`.
 
 ## Configuration
 
@@ -143,8 +131,8 @@ All of it lives in `.env` (copy from `.env.example`). The ones worth knowing:
 | `LPD_BACKEND` | `stub` | Detection stage: `stub`, or `model` for `app/lpd/model.py` |
 | `LPR_BACKEND` | `stub` | Recognition stage: `stub`, or `model` for `app/lpr/model.py` |
 | `LPD_WEIGHTS` / `LPR_WEIGHTS` | — | Paths inside the container, e.g. `/app/weights/lpd/best.pt` |
-| `MAX_FRAMES` | 8 | Frames sampled per video (old name `STUB_MAX_FRAMES` still works) |
-| `STUB_DELAY_MS` | 1500 | Fake latency so the polling UI is visible. Stub only |
+| `VIDEO_SAMPLE_FPS` | 2 | Target analyzed frames per second across the whole video; replaces the retired `MAX_FRAMES` cap |
+| `STUB_DELAY_MS` | 0 | Fake latency so the polling UI is visible. Stub only |
 
 ## Troubleshooting
 
