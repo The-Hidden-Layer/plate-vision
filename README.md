@@ -5,9 +5,9 @@ watch it process, see the plates.
 
 Nx monorepo · Next.js frontend · Django backend · FastAPI AI service · Docker.
 
-> The AI service supports YOLO detection and Iranian LPRNet recognition, plus
-> explicit stub backends for demos. Train and evaluate models before enabling
-> real inference. See [the model workflow](docs/model-workflow.md).
+> The AI service runs YOLO plate detection and Iranian LPRNet recognition on
+> CPU inside Docker. Stub backends remain available for model-free demos. See
+> [the model workflow](docs/model-workflow.md) for training.
 
 ---
 
@@ -16,17 +16,28 @@ Nx monorepo · Next.js frontend · Django backend · FastAPI AI service · Docke
 Prerequisites: **Docker Desktop** (running) and nothing else. Node and Python are
 only needed if you want to run Nx commands outside Docker.
 
-The example configuration uses **demo stubs**: their boxes and plate strings are
-generated placeholders. For actual plate readings, use the trained deployment
-in [the model workflow](docs/model-workflow.md). Keep an existing `.env` when
-restarting an already configured installation.
+**1. Get the model weights.** They are too large for git and are shared
+separately; ask the team for them. Place them at:
+
+```
+apps/ai-service/weights/lpd/best.pt   # plate detector (YOLO)
+apps/ai-service/weights/lpr/best.pt   # plate reader (LPRNet)
+```
+
+No weights? Set `LPD_BACKEND=stub` and `LPR_BACKEND=stub` in `.env` to run with
+placeholder boxes and plate strings instead.
+
+**2. Start everything.** Keep an existing `.env` when restarting an already
+configured installation.
 
 ```bash
 cp -n .env.example .env
-docker compose up
+docker compose up --build
 ```
 
-First run builds four images and takes a few minutes. Then:
+First run builds four images and takes several minutes (the AI image installs
+CPU-only PyTorch). The AI service needs up to two minutes to load the models
+before it reports healthy. Then:
 
 | URL | What |
 |---|---|
@@ -128,9 +139,10 @@ All of it lives in `.env` (copy from `.env.example`). The ones worth knowing:
 | `AI_SERVICE_URL` | `http://ai-service:8100` | Point at the host to bypass Docker |
 | `AI_REQUEST_TIMEOUT_SECONDS` | 600 | Worker gives up after this |
 | `AI_RETRY_BACKOFF_SECONDS` | 5 | Doubles per retry (5s, 10s), 3 attempts total |
-| `LPD_BACKEND` | `stub` | Detection stage: `stub`, or `model` for `app/lpd/model.py` |
-| `LPR_BACKEND` | `stub` | Recognition stage: `stub`, or `model` for `app/lpr/model.py` |
-| `LPD_WEIGHTS` / `LPR_WEIGHTS` | — | Paths inside the container, e.g. `/app/weights/lpd/best.pt` |
+| `LPD_BACKEND` | `model` | Detection stage: `stub`, or `model` for `app/lpd/model.py` |
+| `LPR_BACKEND` | `model` | Recognition stage: `stub`, or `model` for `app/lpr/model.py` |
+| `LPD_WEIGHTS` / `LPR_WEIGHTS` | `/app/weights/{lpd,lpr}/best.pt` | Paths inside the container |
+| `AI_DEVICE` | `auto` | `cpu` in Docker; the NVIDIA overlay sets `cuda:0` |
 | `VIDEO_SAMPLE_FPS` | 2 | Target analyzed frames per second across the whole video; replaces the retired `MAX_FRAMES` cap |
 | `STUB_DELAY_MS` | 0 | Fake latency so the polling UI is visible. Stub only |
 
@@ -164,7 +176,7 @@ the worker retries twice with backoff before giving up.
 apps/
   frontend/     Next.js (App Router, Tailwind)
   backend/      Django + DRF + Celery
-  ai-service/   FastAPI — the stub to be replaced
+  ai-service/   FastAPI — plate detection + recognition models
 libs/
   api-types/    TypeScript types generated from the OpenAPI schema
 docs/

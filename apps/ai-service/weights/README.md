@@ -1,18 +1,24 @@
 # Model weights
 
-Put detection weights in `lpd/` and recognition weights in `lpr/`, then point
-the service at them:
+The AI service loads two trained models from here:
 
 ```
-LPD_BACKEND=model
-LPD_WEIGHTS=/app/weights/lpd/best.pt
-LPR_BACKEND=model
-LPR_WEIGHTS=/app/weights/lpr/best.pt
+lpd/best.pt   plate detector (YOLO)
+lpr/best.pt   plate reader (LPRNet)
 ```
 
-`apps/ai-service` is bind-mounted at `/app` in compose, so a file dropped here
-shows up at `/app/weights/...` without rebuilding the image.
+The weight files are git-ignored (too big for the repo) and shared separately —
+ask the team for them and drop them in place. `apps/ai-service` is bind-mounted
+at `/app` in compose, so they show up at `/app/weights/...` without rebuilding
+the image; restart the service to load new ones:
 
-The weight files themselves are git-ignored — they are too big for the repo.
-Keep them wherever the team keeps artifacts and record the source in the model
-README (`app/lpd/README.md`, `app/lpr/README.md`).
+```
+docker compose restart ai-service
+```
+
+Without them the service fails to start with the models enabled. For a
+model-free demo set `LPD_BACKEND=stub` and `LPR_BACKEND=stub` in `.env`.
+
+Other checkpoints can sit alongside and be selected with `LPD_WEIGHTS` /
+`LPR_WEIGHTS` in `.env`. Record where each file came from in the model READMEs
+(`app/lpd/README.md`, `app/lpr/README.md`).

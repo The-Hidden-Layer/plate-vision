@@ -23,11 +23,14 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
+# INSTALL_ML: false = stub backends only; cpu = trained models on CPU-only
+# PyTorch (default in compose); true = CUDA PyTorch (NVIDIA overlay).
 ARG INSTALL_ML=false
 ARG INSTALL_TENSORRT=false
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ "$INSTALL_TENSORRT" = "true" ]; then uv sync --frozen --extra ml --extra export --extra tensorrt; \
     elif [ "$INSTALL_ML" = "true" ]; then uv sync --frozen --extra ml --extra export; \
+    elif [ "$INSTALL_ML" = "cpu" ]; then uv sync --frozen --extra cpu; \
     else uv sync --frozen; fi
 
 COPY . .

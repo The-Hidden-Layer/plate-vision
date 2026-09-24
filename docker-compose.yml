@@ -1,11 +1,12 @@
 # plate-vision — development topology.
 #
-#   cp .env.example .env && docker compose up
+#   cp .env.example .env && docker compose up --build
 #
-# Infra (`db`, `redis`) runs today. The three application services below are
-# declared now but only build once their phase lands:
-#   backend / worker  -> Phase 2    ai-service -> Phase 3    frontend -> Phase 5
-# Until then, bring up what exists:  docker compose up db redis
+# Everything runs in containers: db, redis, backend (Django), worker (Celery),
+# ai-service (FastAPI + trained LPD/LPR models on CPU) and frontend (Next.js).
+# The model weights must be present in apps/ai-service/weights/{lpd,lpr}/best.pt
+# (see apps/ai-service/weights/README.md). NVIDIA GPU hosts add
+# -f docker-compose.nvidia.yml.
 #
 # All source is bind-mounted for hot reload. Two consequences the Dockerfiles
 # must respect:
@@ -100,8 +101,23 @@ services:
     build:
       context: ./apps/ai-service
       dockerfile: Dockerfile
+      args:
+        # CPU-only PyTorch: runs on any machine without pulling CUDA libraries.
+        # GPU hosts use docker-compose.nvidia.yml instead.
+        INSTALL_ML: cpu
     command: uvicorn app.main:app --host 0.0.0.0 --port 8100 --reload
     env_file: .env
+    environment:
+      # Trained models by default; set LPD_BACKEND/LPR_BACKEND=stub in .env for
+      # a model-free demo. Weights live in apps/ai-service/weights (bind-mounted).
+      LPD_BACKEND: ${LPD_BACKEND:-model}
+      LPR_BACKEND: ${LPR_BACKEND:-model}
+      LPD_WEIGHTS: ${LPD_WEIGHTS:-/app/weights/lpd/best.pt}
+      LPR_WEIGHTS: ${LPR_WEIGHTS:-/app/weights/lpr/best.pt}
+      AI_DEVICE: ${AI_DEVICE:-cpu}
+      AI_PRECISION: ${AI_PRECISION:-fp32}
+      YOLO_CONFIG_DIR: /tmp/ultralytics
+      MPLCONFIGDIR: /tmp/matplotlib
     volumes:
       - ./apps/ai-service:/app
       - media:/app/media
@@ -118,7 +134,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 20s
+      start_period: 120s # models load and warm up before /health answers
 
   frontend:
     build:
